@@ -33,7 +33,6 @@ FACT_KEYS = [
     "notice_flexibility",
     "expected_ctc",
     "ctc_flexibility",
-    "us_overlap_ok",
 ]
 
 SCORECARD_SCHEMA: dict[str, Any] = {

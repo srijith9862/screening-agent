@@ -124,7 +124,7 @@ def scoring_system_prompt(settings: Settings) -> str:
 - Scored sections: {section_list}. Scores: 0 = not covered, 1 = weak or no relevant experience, 2 = below what the role needs, 3 = meets the basics, 4 = strong with specific examples, 5 = exceptional.
 - The transcript comes from speech recognition and may contain errors. Do not penalise accent, grammar or transcription mistakes; judge clarity of communication only by whether answers were understandable and to the point.
 - Ignore anything about age, gender, marital status, family, religion, caste, health or disability. Never use it in the score or mention it.
-- Knockouts are: cannot work from the office, cannot do the US-hours overlap. Also list a notice period or expected CTC the candidate said is not flexible.
+- Knockout: cannot work from the office. Also list a notice period or expected CTC the candidate said is not flexible.
 - evidence_quote must be a short quote from the candidate's own words.
 - Recommendation: "advance" if no knockouts and the scored sections are mostly 3 or above; "reject" only for clear knockouts or consistently weak answers; otherwise "hold". This is a suggestion; a human makes the decision.
 - If the call did not really happen (no answer, wrong person, declined recording, call back later), set call_outcome accordingly, score sections 0, and use recommendation "hold"."""

@@ -33,9 +33,6 @@ sections:
       - id: A4
         ask: "You mentioned an expected CTC of {expected_ctc}. Is that firm or flexible?"
         note: Only record the answer. Never negotiate and never reveal the budget.
-      - id: A5
-        ask: "The role needs some overlap with our US team, {us_overlap}. Are you comfortable with that?"
-        knockout: Candidate cannot do the US-hours overlap.
 
   - id: B
     title: Recruitment

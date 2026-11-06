@@ -19,67 +19,82 @@ Windows laptop (this program)                       Galaxy S24 Ultra
 
 ## 1. One-time setup on Windows
 
-### Software
-1. **Python 3.11+** from python.org (tick "Add python.exe to PATH").
-2. **Android platform-tools** (ADB): download from developer.android.com/tools/releases/platform-tools, unzip to `C:\platform-tools`. Either add it to PATH or set `phone.adb_path: C:\platform-tools\adb.exe` in `config/settings.yaml`.
-3. **Two virtual audio cables** from vb-audio.com: **VB-CABLE** (free) and **VB-CABLE A+B** (donationware). Reboot after installing.
-4. **Phone Link** (preinstalled on Windows 11) paired with the phone, with **Calls** set up (it pairs over Bluetooth).
-
-### Install
+### Step 1: Get the code
+Open **PowerShell** (Start menu → type `PowerShell` → Enter) and run these one at a time:
+```bash
+winget install -e --id Git.Git
+```
+Close and reopen PowerShell, then:
+```bash
+cd $HOME\Documents
+```
 ```bash
 git clone https://github.com/srijith9862/screening-agent
 ```
+(A GitHub sign-in window may pop up; sign in.) No winget? Download the ZIP instead: on the GitHub repo page → green **Code** button → **Download ZIP** → unzip into Documents.
+
+### Step 2: Run the setup script
+Open the `screening-agent` folder in File Explorer and **double-click `setup.bat`**. It:
+1. Installs **Python 3.12** if you don't have it (via winget).
+2. Downloads **ADB** (Android platform-tools) from Google, adds it to PATH, and puts its path in `config/settings.yaml`.
+3. Downloads and launches the installers for two free virtual audio cables from vb-audio.com: **VB-CABLE** and **Hi-Fi Cable**. Windows asks "Allow changes?" → **Yes**, then click **Install Driver** / **Install** in each window and close it.
+4. Installs the Python packages into `.venv`.
+5. Opens the Anthropic and Deepgram key pages in your browser and asks you to paste each key into the window (typing is hidden). The keys are saved to `.env` on your laptop only.
+   - **Anthropic** (console.anthropic.com/settings/keys): sign up → add a payment method under Billing → **Create Key** → copy.
+   - **Deepgram** (console.deepgram.com): sign up (new accounts get free credit) → **API Keys** → **Create a New API Key** → copy.
+6. Runs `screener check` to show what's left.
+
+If Windows SmartScreen warns about `setup.bat`, click **More info → Run anyway**. You can run it again any time; finished steps are skipped.
+
+**Restart the laptop** after the audio drivers are installed.
+
+### Step 3: The phone (S24 Ultra)
+1. **Settings → About phone → Software information** → tap **Build number** 7 times (enter your PIN). "Developer mode has been enabled" appears.
+2. **Settings → Developer options** (at the bottom of Settings) → turn on **USB debugging** and **Stay awake**.
+3. Connect the phone to the laptop with a USB cable. On the phone, tap **Allow** on "Allow USB debugging?" (tick **Always allow from this computer**).
+4. Check it worked: in the `screening-agent` folder run `screener check`. "ADB devices" should list your phone.
+5. While calling: keep the phone unlocked, plugged in, and don't use it for anything else.
+
+### Step 4: Phone Link (so the laptop carries the call audio)
+1. On the laptop open **Phone Link** (Start menu → `Phone Link`) → **Android**.
+2. On the phone, swipe down twice and tap **Link to Windows** (or Settings → Connected devices → Link to Windows), then scan the QR code shown on the laptop.
+3. In Phone Link, open the **Calls** tab → **Get started** → follow the Bluetooth pairing prompts on both devices (confirm the matching code).
+4. Make a test call from Phone Link to any number. You should hear it through the laptop.
+
+### Step 5: Route Phone Link's audio through the cables
+The agent listens on one cable and speaks into the other:
+
+| Phone Link setting | Set it to | Why |
+|---|---|---|
+| Output (speaker) | **CABLE Input (VB-Audio Virtual Cable)** | the candidate's voice goes to the agent |
+| Input (microphone) | **Hi-Fi Cable Output (VB-Audio Hi-Fi Cable)** | the agent's voice goes into the call |
+
+How:
+1. Start a test call from Phone Link (Phone Link only shows up in the mixer while it's using audio).
+2. Open **Settings → System → Sound → Volume mixer** (Windows 10: **Sound → App volume and device preferences**).
+3. Find **Phone Link** in the apps list, expand it, and set **Output device** and **Input device** as in the table.
+4. Hi-Fi Cable needs matching sample rates: press `Win+R`, type `mmsys.cpl`, Enter.
+   - **Playback** tab → **Hi-Fi Cable Input** → Properties → Advanced → choose **48000 Hz** → OK.
+   - **Recording** tab → **Hi-Fi Cable Output** → Properties → Advanced → choose **48000 Hz** → OK.
+5. Want to listen in on calls? In the same window: **Recording** tab → **CABLE Output** → Properties → **Listen** tab → tick **Listen to this device** → pick your headphones.
+
+> **If Phone Link ignores the per-app setting:** in `mmsys.cpl`, right-click **CABLE Input** (Playback tab) and **Hi-Fi Cable Output** (Recording tab) → **Set as Default Communication Device**. Undo this when you're not using the agent.
+
+If your device names differ, run `screener devices` and update the `audio:` section of `config/settings.yaml`.
+
+### Step 6: Test the audio
+With a test call to a friend running in Phone Link:
 ```bash
-cd screening-agent
+screener audio-test
 ```
-```bash
-python -m venv .venv
-```
-```bash
-.venv\Scripts\activate
-```
-```bash
-pip install -r requirements.txt
-```
-
-### API keys
-Copy `.env.example` to `.env` and fill in:
-- `ANTHROPIC_API_KEY` from console.anthropic.com
-- `DEEPGRAM_API_KEY` from console.deepgram.com (speech-to-text and voice)
-
-### Phone (S24 Ultra)
-1. Settings → About phone → Software information → tap **Build number** 7 times to unlock Developer options.
-2. Settings → Developer options → turn on **USB debugging** and **Stay awake**.
-3. Connect by USB, tap **Allow** on the "Allow USB debugging?" prompt (tick "Always allow").
-4. Keep the phone unlocked and on charge while calling.
-
-### Route the call audio
-Windows Settings → System → Sound → **Volume mixer** → **Phone Link**:
-- **Output device:** `CABLE Input (VB-Audio Virtual Cable)`, so the candidate's voice goes to the agent
-- **Input device:** `CABLE-A Output (VB-Audio Cable A)`, so the agent's voice goes into the call
-
-Want to listen in live? Control Panel → Sound → Recording → **CABLE Output** → Properties → Listen → tick **Listen to this device** and pick your headphones.
-
-If your device names differ, run `python -m screener devices` and update the `audio:` section of `config/settings.yaml`.
-
-### Check everything
-```bash
-python -m screener check
-```
-Then call a friend from Phone Link and run:
-```bash
-python -m screener audio-test
-```
-Your friend should hear a beep, and the level bar should move when they talk.
-
-> **If Phone Link ignores the per-app setting**, set the same two devices as the Windows *default communication devices* (Control Panel → Sound → right-click → Set as Default Communication Device) and try again.
+Your friend should hear a beep, and the level bar should move when they talk. (`screener` is the `screener.bat` shortcut in this folder; run commands from the `screening-agent` folder.)
 
 ---
 
 ## 2. Before calling: fill in your details
 
-- `config/faq.yaml`: replace every `TODO` (office hours, interview process, benefits...). Until then, the agent tells candidates "the HR team will get back to you" for those topics.
-- `config/settings.yaml` → `script_values`: office schedule and US-overlap hours.
+- `config/faq.yaml`: replace any remaining `TODO`. Until then, the agent tells candidates "the HR team will get back to you" for those topics.
+- `config/settings.yaml` → `script_values`: office schedule.
 - `config/script.yaml`: the questions. Edit freely.
 - Put your Naukri shortlist at `data/candidates.csv`. It needs a **`Phone`** column (`+919876543210` or a 10-digit number). An optional `Preferred_call_time` column is shown before each call. `Category` and `Rating_out_of_10` are deliberately **not** shown to the AI, so it isn't biased.
 
@@ -91,12 +106,12 @@ Your friend should hear a beep, and the level bar should move when they talk.
 
 **Text practice** (only needs the Anthropic key). You type as the candidate:
 ```bash
-python -m screener practice --name "Harshitha"
+screener practice --name "Harshitha"
 ```
 
 **Voice rehearsal** on your laptop mic. **Use headphones**, otherwise the agent hears itself:
 ```bash
-python -m screener rehearse --name "Harshitha"
+screener rehearse --name "Harshitha"
 ```
 
 Both write a scorecard to `output/` so you can check the scoring too.
@@ -106,7 +121,7 @@ Both write a scorecard to `output/` so you can check the scoring too.
 ## 4. Make calls
 
 ```bash
-python -m screener call
+screener call
 ```
 - Asks before each call (`Y` / `s`kip / `q`uit). Add `--yes` to stop asking, `--name "Kiran"` to call one person.
 - Only calls inside `calling_hours` (10:00–19:00 IST by default) and waits `gap_between_calls_s` between calls.
@@ -122,13 +137,13 @@ python -m screener call
 
 Re-run a scorecard after editing the rubric:
 ```bash
-python -m screener score output\calls\2026-11-07\harshitha-devulapalli-103015
+screener score output\calls\2026-11-07\harshitha-devulapalli-103015
 ```
 
 ### Retention
 Recordings are personal data (DPDP Act 2023). Delete call folders older than `retention_days` (90 by default):
 ```bash
-python -m screener purge
+screener purge
 ```
 
 ---
@@ -137,8 +152,8 @@ python -m screener purge
 
 | Problem | Fix |
 |---|---|
-| Agent starts talking during the caller tune / never starts | Run `python -m screener adb-state` during a call. If you don't see `state: ACTIVE` lines once answered, set `phone.answer_detection: speech`. |
-| Candidate can't hear the agent | Phone Link input device must be `CABLE-A Output`; `audio.call_out_device` must be `CABLE-A Input`. Re-run `audio-test`. |
+| Agent starts talking during the caller tune / never starts | Run `screener adb-state` during a call. If you don't see `state: ACTIVE` lines once answered, set `phone.answer_detection: speech`. |
+| Candidate can't hear the agent | Phone Link input device must be `Hi-Fi Cable Output`; `audio.call_out_device` must be `Hi-Fi Cable Input`; both at 48000 Hz. Re-run `audio-test`. |
 | Agent can't hear the candidate | Phone Link output device must be `CABLE Input`; `audio.call_in_device` must be `CABLE Output`. |
 | Replies feel slow | Lower `deepgram.endpointing_ms` (e.g. 300). `claude.live_effort` is already `low`. |
 | Agent interrupts the candidate mid-thought | Raise `deepgram.utterance_end_ms` (e.g. 1500) and `endpointing_ms` (e.g. 600). |

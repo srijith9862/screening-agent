@@ -4,8 +4,7 @@ agent_name: Maya
 
 # Values used to fill {placeholders} in script.yaml.
 script_values:
-  office_schedule: TODO e.g. 10 am to 7 pm, Monday to Saturday
-  us_overlap: TODO e.g. calls until about 9 pm IST two or three days a week
+  office_schedule: 9 am to 5 pm
   reply_timeline: within 3 working days
 
 claude:
@@ -27,7 +26,7 @@ audio:
   # Substring of the Windows device names. Run `python -m screener devices`
   # to see the exact names on your laptop.
   call_in_device: "CABLE Output"     # what the candidate says (Phone Link plays into "CABLE Input")
-  call_out_device: "CABLE-A Input"   # what the agent says (Phone Link's mic is "CABLE-A Output")
+  call_out_device: "Hi-Fi Cable Input"   # what the agent says (Phone Link's mic is "Hi-Fi Cable Output")
 
 phone:
   adb_path: adb              # or full path, e.g. C:\platform-tools\adb.exe

@@ -2,7 +2,7 @@
 
 Call audio path on Windows (see README):
   Phone Link speaker -> "CABLE Input"   -> we read  "CABLE Output"   (candidate's voice)
-  we write "CABLE-A Input" -> "CABLE-A Output" -> Phone Link mic     (agent's voice)
+  we write "Hi-Fi Cable Input" -> "Hi-Fi Cable Output" -> Phone Link mic   (agent's voice)
 """
 
 from __future__ import annotations
