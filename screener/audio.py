@@ -41,21 +41,38 @@ def list_devices() -> str:
     return "\n".join(lines)
 
 
+def pick_device(name_part: str, devices: list[dict[str, Any]], kind: str) -> int | None:
+    """Index of the device whose name starts with name_part (else contains it).
+
+    "Starts with" wins so that "CABLE Output" picks "CABLE Output (VB-Audio
+    Virtual Cable)" and not "Hi-Fi Cable Output (VB-Audio Hi-Fi Cable)".
+    """
+    key = "max_input_channels" if kind == "input" else "max_output_channels"
+    wanted = name_part.lower()
+    usable = [(i, d) for i, d in enumerate(devices) if d[key] > 0]
+    for i, d in usable:
+        if d["name"].lower().startswith(wanted):
+            return i
+    for i, d in usable:
+        if wanted in d["name"].lower():
+            return i
+    return None
+
+
 def find_device(name_part: str | None, kind: str) -> int | None:
-    """Finds a device whose name contains name_part. None means the system default."""
+    """Finds a device by name. None means the system default."""
     if not name_part:
         return None
+    index = pick_device(name_part, list(_sd().query_devices()), kind)
+    if index is None:
+        raise RuntimeError(f"No {kind} device matching '{name_part}'. Run `screener devices`.")
+    return index
+
+
+def device_name(index: int | None, kind: str) -> str:
     sd = _sd()
-    key = "max_input_channels" if kind == "input" else "max_output_channels"
-    matches = [
-        (i, d)
-        for i, d in enumerate(sd.query_devices())
-        if name_part.lower() in d["name"].lower() and d[key] > 0
-    ]
-    if not matches:
-        raise RuntimeError(f"No {kind} device matching '{name_part}'. Run `python -m screener devices`.")
-    # Prefer the Windows WASAPI/MME variant consistently: take the first match.
-    return matches[0][0]
+    info = sd.query_devices(index, kind) if index is not None else sd.query_devices(kind=kind)
+    return f"{info['name']} ({int(info['default_samplerate'])} Hz)"
 
 
 def to_int16_bytes(samples: np.ndarray) -> bytes:
@@ -171,6 +188,8 @@ class AudioEngine:
         self._out_index = find_device(out_device, "output")
         self.in_rate = int(sd.query_devices(self._in_index, "input")["default_samplerate"])
         self.out_rate = int(sd.query_devices(self._out_index, "output")["default_samplerate"])
+        self.in_name = device_name(self._in_index, "input")
+        self.out_name = device_name(self._out_index, "output")
         self._on_candidate_audio = on_candidate_audio
         self.recorder = recorder
         self.player = Player()

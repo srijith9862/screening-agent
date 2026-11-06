@@ -143,6 +143,23 @@ def test_parse_call_state():
 # --- audio ---------------------------------------------------------------------
 
 
+def test_pick_device_prefers_name_prefix():
+    from screener.audio import pick_device
+
+    devices = [
+        {"name": "Speakers (Realtek)", "max_input_channels": 0, "max_output_channels": 2},
+        {"name": "Hi-Fi Cable Output (VB-Audio Hi-Fi Cable)", "max_input_channels": 2, "max_output_channels": 0},
+        {"name": "CABLE Output (VB-Audio Virtual Cable)", "max_input_channels": 2, "max_output_channels": 0},
+        {"name": "Hi-Fi Cable Input (VB-Audio Hi-Fi Cable)", "max_input_channels": 0, "max_output_channels": 2},
+        {"name": "CABLE Input (VB-Audio Virtual Cable)", "max_input_channels": 0, "max_output_channels": 2},
+    ]
+    assert pick_device("CABLE Output", devices, "input") == 2
+    assert pick_device("CABLE Input", devices, "output") == 4
+    assert pick_device("Hi-Fi Cable Input", devices, "output") == 3
+    assert pick_device("Realtek", devices, "output") == 0  # substring fallback
+    assert pick_device("CABLE Output", devices, "output") is None
+
+
 def test_player_pull_and_clear():
     player = Player()
     player.enqueue(np.ones(30, np.float32))

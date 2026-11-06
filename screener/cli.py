@@ -173,25 +173,77 @@ def cmd_adb_state(args: argparse.Namespace, settings: Settings) -> None:
     print(Phone(settings.get("phone.adb_path", "adb"), settings.get("phone.device_serial")).debug_state())
 
 
+def _say_into_call(engine, text: str) -> None:
+    """Speaks `text` into the call with the agent's voice (falls back to a beep)."""
+    import os
+
+    from .audio import tone
+    from .speech import TTS_RATE, TextToSpeech
+
+    key = os.environ.get("DEEPGRAM_API_KEY", "")
+    audio = None
+    if key:
+        async def synth():
+            tts = TextToSpeech(key, "flux-priya-en")
+            try:
+                return await tts.synthesize(text)
+            finally:
+                await tts.close()
+
+        try:
+            audio = asyncio.run(synth())
+        except Exception as exc:  # noqa: BLE001 - a beep is good enough for the test
+            print(f"  (voice unavailable: {exc})")
+    if audio is None:
+        engine.play(tone(1.0, engine.out_rate), engine.out_rate)
+    else:
+        engine.play(audio, TTS_RATE)
+    while not engine.player.is_idle():
+        time.sleep(0.05)
+
+
+def _measure(engine, seconds: float, label: str) -> float:
+    """Shows a live level bar for `seconds` and returns the average level."""
+    levels = []
+    end = time.time() + seconds
+    while time.time() < end:
+        levels.append(engine.input_level)
+        bar = "#" * min(50, int(engine.input_level * 400))
+        print(f"\r  {label:<8} {bar:<50} {int(end - time.time()) + 1:2d}s", end="", flush=True)
+        time.sleep(0.1)
+    print()
+    return sum(levels) / max(1, len(levels))
+
+
 def cmd_audio_test(args: argparse.Namespace, settings: Settings) -> None:
-    """Plays a tone into the call and shows the level of incoming call audio."""
-    from .audio import AudioEngine, Recorder, tone
+    """Checks both directions of call audio during a Phone Link call to a friend."""
+    from .audio import AudioEngine, Recorder
 
     engine = AudioEngine(settings.get("audio.call_in_device"), settings.get("audio.call_out_device"), lambda _b: None, Recorder())
+    print("Before running this, start a Phone Link call to a friend and keep it going.")
+    print(f"  Agent speaks into : {engine.out_name}")
+    print(f"  Agent listens to  : {engine.in_name}\n")
     engine.start()
-    print("Make a test call to another phone (e.g. a friend) first, through Phone Link.")
-    print("Playing a beep into the call: the other phone should hear it...")
-    engine.play(tone(1.5, engine.out_rate), engine.out_rate)
     try:
-        end = time.time() + args.seconds
-        print("Now speak on the other phone. Incoming level:")
-        while time.time() < end:
-            bar = "#" * min(50, int(engine.input_level * 400))
-            print(f"\r  {bar:<50}", end="", flush=True)
-            time.sleep(0.1)
+        print("1) The agent is telling your friend what to do (they should hear it)...")
+        _say_into_call(engine, "Hi, this is a sound check. Please stay completely quiet for five seconds.")
+        quiet = _measure(engine, 5, "quiet")
+        _say_into_call(engine, "Thank you. Now please count slowly from one to ten.")
+        talking = _measure(engine, 7, "talking")
+        _say_into_call(engine, "Thanks, that's all.")
     finally:
         engine.stop()
-        print("\nDone. If the bar moved when the other person spoke and they heard the beep, audio is routed correctly.")
+
+    print(f"\nAverage level  quiet: {quiet:.4f}   talking: {talking:.4f}")
+    if talking > 0.003 and talking > quiet * 2.5:
+        print("PASS: the agent can hear your friend. If your friend also heard the instructions, routing is done.")
+    elif talking <= 0.003 and quiet <= 0.003:
+        print("FAIL: no call audio is reaching the agent. Phone Link's speaker isn't going to 'CABLE Input'.")
+        print("  Fix: Win+R > mmsys.cpl > Playback > right-click 'CABLE Input' > Set as Default Communication Device,")
+        print("       then hang up, call again, and re-run this test.")
+    else:
+        print("UNCLEAR: audio arrives but talking wasn't clearly louder than silence.")
+        print("  Check your friend counted out loud, the line wasn't noisy, then run the test again.")
 
 
 def cmd_voice_test(args: argparse.Namespace, settings: Settings) -> None:
@@ -390,9 +442,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--expressivity", type=int, choices=[-2, -1, 0, 1, 2], help="-2 calm ... 2 animated")
     p.add_argument("--compare", action="store_true", help="play expressivity 0, 1 and 2 one after another")
     p.set_defaults(func=cmd_voice_test)
-    p = sub.add_parser("audio-test", help="test call audio routing during a manual call")
-    p.add_argument("--seconds", type=int, default=15)
-    p.set_defaults(func=cmd_audio_test)
+    sub.add_parser("audio-test", help="test call audio routing during a Phone Link call").set_defaults(func=cmd_audio_test)
     p = with_candidates(sub.add_parser("practice", help="text rehearsal: you type as the candidate"))
     p.add_argument("--no-score", action="store_true")
     p.set_defaults(func=cmd_practice)
