@@ -262,16 +262,28 @@ class CallSession:
         assert self.phone is not None
         if self.s.get("phone.dial_via", "phonelink") == "phonelink":
             clicked, details = await phonelink.dial(self.candidate.phone)
-            if clicked:
-                self._say(f"Dialing through Phone Link ({details.removeprefix('CLICKED ').strip()}).")
+            # A "click" isn't proof: confirm on the phone that a call really started.
+            started = await self._call_started(8)
+            if started:
+                how = details.removeprefix("CLICKED ").strip() if clicked else "call started"
+                self._say(f"Dialing through Phone Link ({how}).")
                 return True
-            # Phone Link may have placed the call without a button: never dial twice.
-            await asyncio.sleep(2)
-            if await self.phone.call_state() != CALL_STATE_IDLE:
-                self._say("Dialing (call already started).")
-                return False  # still check the audio reached the laptop
-            self._say(f"! Phone Link didn't place the call ({details[:300]}). Dialing from the phone instead.")
+            reason = "clicked Call but no call started" if clicked else details[:300]
+            self._say(f"! Phone Link didn't place the call ({reason}). Dialing from the phone instead.")
         await self.phone.dial(self.candidate.phone)
+        return False
+
+    async def _call_started(self, seconds: float) -> bool:
+        """True once the phone reports a call in progress (dialing or connected)."""
+        assert self.phone is not None
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            try:
+                if await self.phone.call_state() != CALL_STATE_IDLE:
+                    return True
+            except PhoneError:
+                pass
+            await asyncio.sleep(0.5)
         return False
 
     async def _call_audio_arriving(self, seconds: float, threshold: float = 0.002) -> bool:
