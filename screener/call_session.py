@@ -204,12 +204,16 @@ class CallSession:
         # While it rings, move the call audio to the laptop if it started on the phone.
         route_task = None if via_phone_link else asyncio.create_task(self._get_audio_to_laptop())
 
+        picked_up = False
+
         async def answered(result: str) -> str:
+            nonlocal picked_up
+            picked_up = True
             if route_task is not None and not route_task.done():
                 try:  # let the transfer finish before the agent speaks
                     await asyncio.wait_for(asyncio.shield(route_task), timeout=8)
                 except asyncio.TimeoutError:
-                    self._say("! Call audio may still be on the phone. Click 'Transfer' on the laptop if you see it.")
+                    self._say("! Call audio may still be on the phone. Click 'Transfer to PC' on the laptop.")
             return result
 
         try:
@@ -231,19 +235,25 @@ class CallSession:
                         return await answered(heard)
             return None
         finally:
-            if route_task is not None and not route_task.done():
+            # Not answered: stop looking. Answered: let it keep looking (and report) in the background.
+            if route_task is not None and not route_task.done() and not picked_up:
                 route_task.cancel()
 
     async def _get_audio_to_laptop(self) -> None:
         """The call started on the phone: click Phone Link's Transfer popup, else tap Bluetooth on the phone."""
-        clicked, details = await phonelink.click_transfer(timeout_s=12)
+        # The "Transfer to PC" button may only appear once the call is answered,
+        # so keep looking for the whole ringing time plus a little.
+        timeout = int(float(self.s.get("phone.ring_timeout_s", 45))) + 20
+        clicked, details = await phonelink.click_transfer(timeout_s=timeout)
         if clicked:
             self._say(f"Call audio: clicked '{details.removeprefix('CLICKED ').strip()}' in Phone Link.")
             return
         if await self._call_audio_arriving(1):
             self._say("Call audio: reaching the laptop.")
             return
-        log.info("Transfer popup not found: %s", details)
+        self._say("! Couldn't find Phone Link's 'Transfer to PC' button. Please paste these lines to Claude:")
+        for line in details.splitlines():
+            self._say(f"  {line[:600]}")
         if self.s.get("phone.auto_bluetooth", True):
             await self._route_audio_to_laptop()
 
