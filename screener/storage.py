@@ -18,16 +18,28 @@ RESULTS_COLUMNS = [
     "name",
     "phone",
     "outcome",
-    "recording_consent",
     "recommendation",
+    "recommendation_reason",
+    "avg_score",
     "score_B_recruitment",
     "score_C_remote",
     "score_D_employee_relations",
     "score_E_compliance",
+    "current_ctc",
+    "expected_ctc",
+    "within_budget",
+    "ctc_flexibility",
+    "notice_period",
+    "notice_flexibility",
+    "office_commute_ok",
     "knockouts",
+    "strengths",
     "red_flags",
+    "questions_for_hr",
     "callback_request",
     "summary",
+    "duration_min",
+    "recording_consent",
     "folder",
 ]
 
@@ -50,6 +62,11 @@ def results_path(settings: Settings) -> Path:
 def append_result(settings: Settings, row: dict[str, Any]) -> None:
     path = results_path(settings)
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        with path.open(newline="", encoding="utf-8-sig") as handle:
+            header = next(csv.reader(handle), [])
+        if header != RESULTS_COLUMNS:  # columns changed: keep the old file, start a new one
+            path.rename(path.with_name(f"results-before-{datetime.now():%Y%m%d-%H%M%S}.csv"))
     new_file = not path.exists()
     # utf-8-sig so Excel shows ₹ and names correctly.
     with path.open("a", newline="", encoding="utf-8-sig" if new_file else "utf-8") as handle:
@@ -61,29 +78,39 @@ def append_result(settings: Settings, row: dict[str, Any]) -> None:
 
 def already_screened(settings: Settings) -> set[str]:
     """Phones that already have a finished screening (so re-runs skip them)."""
-    path = results_path(settings)
-    if not path.exists():
-        return set()
     done = set()
-    with path.open(newline="", encoding="utf-8-sig") as handle:
-        for row in csv.DictReader(handle):
-            if row.get("outcome") in ("completed", "partial", "declined_recording", "not_interested", "wrong_person"):
-                done.add(row.get("phone", ""))
+    for path in [results_path(settings), *results_path(settings).parent.glob("results-before-*.csv")]:
+        if not path.exists():
+            continue
+        with path.open(newline="", encoding="utf-8-sig") as handle:
+            for row in csv.DictReader(handle):
+                if row.get("outcome") in ("completed", "partial", "declined_recording", "not_interested", "wrong_person"):
+                    done.add(row.get("phone", ""))
     return done
 
 
 def scorecard_row(card: dict[str, Any]) -> dict[str, Any]:
     scores = {s["section_id"]: s["score"] for s in card.get("sections", [])}
+    covered = [v for v in scores.values() if isinstance(v, (int, float)) and v > 0]
+    facts = card.get("confirmed_facts", {})
     return {
         "outcome": card.get("call_outcome", ""),
         "recording_consent": card.get("recording_consent", ""),
         "recommendation": card.get("recommendation", ""),
+        "recommendation_reason": card.get("recommendation_reason", ""),
+        "avg_score": round(sum(covered) / len(covered), 1) if covered else "",
         "score_B_recruitment": scores.get("B", ""),
         "score_C_remote": scores.get("C", ""),
         "score_D_employee_relations": scores.get("D", ""),
         "score_E_compliance": scores.get("E", ""),
+        **{key: facts.get(key, "") for key in (
+            "current_ctc", "expected_ctc", "within_budget", "ctc_flexibility",
+            "notice_period", "notice_flexibility", "office_commute_ok",
+        )},
         "knockouts": "; ".join(card.get("knockouts", [])),
+        "strengths": "; ".join(card.get("strengths", [])),
         "red_flags": "; ".join(card.get("red_flags", [])),
+        "questions_for_hr": "; ".join(card.get("unanswered_candidate_questions", [])),
         "callback_request": card.get("callback_request", ""),
         "summary": card.get("summary", ""),
     }

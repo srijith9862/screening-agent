@@ -73,6 +73,7 @@ async def _finish(settings: Settings, candidate: Candidate, result, call_dir: Pa
         "folder": str(call_dir),
         "recording_consent": result.consent,
         "callback_request": result.callback_request,
+        "duration_min": round(result.duration_s / 60, 1) if result.duration_s else "",
     }
     meta = {
         "candidate": candidate.name,

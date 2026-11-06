@@ -146,7 +146,7 @@ screener call
 - Press `Ctrl+C` to stop at any time; the phone call is hung up.
 
 ### Outputs
-- `output/results.csv`: one row per call (open in Excel): outcome, recommendation, section scores, knockouts, call-back requests, summary.
+- `output/results.csv`: one row per call (open in Excel): outcome, recommendation and reason, average and section scores, current/expected CTC and whether it fits the budget, notice period and flexibility, commute, knockouts, strengths, red flags, questions to answer, call-back time, summary, call length.
 - `output/calls/<date>/<name>-<time>/`
   - `scorecard.md`: the readable scorecard
   - `scorecard.json`, `transcript.json`, `call.json`
