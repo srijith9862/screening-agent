@@ -65,11 +65,20 @@ $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 $ptDir = Split-Path $Adb
 if ($userPath -notlike "*$ptDir*") { [Environment]::SetEnvironmentVariable("Path", "$userPath;$ptDir", "User") }
 Refresh-Path
-# Point the agent at this adb.exe.
-$settingsPath = Join-Path $Root "config\settings.yaml"
-$settings = [IO.File]::ReadAllText($settingsPath)
-$settings = [regex]::Replace($settings, "(?m)^(\s*adb_path:)[^#\r\n]*", "`$1 '$Adb'   ")
-[IO.File]::WriteAllText($settingsPath, $settings, $Utf8NoBom)
+# Point the agent at this adb.exe, in the local (git-ignored) settings file
+# so `git pull` never conflicts with it.
+$localPath = Join-Path $Root "config\settings.local.yaml"
+if (Test-Path $localPath) {
+    $local = [IO.File]::ReadAllText($localPath)
+    if ($local -match "(?m)^\s*adb_path:") {
+        $local = [regex]::Replace($local, "(?m)^(\s*adb_path:)[^#\r\n]*", "`$1 '$Adb'")
+    } else {
+        $local = $local.TrimEnd() + "`r`nphone:`r`n  adb_path: '$Adb'`r`n"
+    }
+} else {
+    $local = "# Settings for this laptop only (not in git). Overrides config\settings.yaml.`r`nphone:`r`n  adb_path: '$Adb'`r`n"
+}
+[IO.File]::WriteAllText($localPath, $local, $Utf8NoBom)
 Ok "ADB: $Adb"
 
 # ---------------------------------------------------------------------------

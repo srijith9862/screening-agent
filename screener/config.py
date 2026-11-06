@@ -79,9 +79,23 @@ class Settings:
         return warnings
 
 
+def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
 def load_settings(config_dir: Path | None = None) -> Settings:
     config_dir = config_dir or CONFIG_DIR
     raw = yaml.safe_load((config_dir / "settings.yaml").read_text(encoding="utf-8")) or {}
+    # Machine-specific overrides (e.g. the adb path written by setup), not in git.
+    local = config_dir / "settings.local.yaml"
+    if local.exists():
+        raw = deep_merge(raw, yaml.safe_load(local.read_text(encoding="utf-8")) or {})
     script = yaml.safe_load((config_dir / "script.yaml").read_text(encoding="utf-8")) or {}
     faq_doc = yaml.safe_load((config_dir / "faq.yaml").read_text(encoding="utf-8")) or {}
     return Settings(raw=raw, script=script, faq=faq_doc.get("faq", []), root=config_dir.parent)

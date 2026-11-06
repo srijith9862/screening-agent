@@ -19,6 +19,9 @@ deepgram:
   stt_model: nova-3
   stt_language: en-IN        # Indian English. Use "en" if en-IN gives errors.
   tts_voice: flux-priya-en   # Indian English, female. Also: flux-meena-en (female), flux-naveen-en (male)
+  # -2 calm ... 0 default ... 2 animated (Flux voices only, beta). Higher values
+  # sound livelier but can occasionally drop or repeat words. Try with voice-test.
+  tts_expressivity: 1
   endpointing_ms: 400        # silence before Deepgram marks speech as finished
   utterance_end_ms: 1200     # longer gap that always ends the candidate's turn
 

@@ -203,21 +203,31 @@ def cmd_voice_test(args: argparse.Namespace, settings: Settings) -> None:
     voice = args.voice or settings.get("deepgram.tts_voice", "flux-priya-en")
     text = args.text or (
         f"Hi, am I speaking with Harshitha? This is {settings.agent_name}, an AI assistant calling on behalf of "
-        f"{settings.script.get('company', 'the company')} about your application for the HR Executive role."
+        f"{settings.script.get('company', 'the company')} about your application for the HR Executive role. "
+        "Is now a good time to talk for about twelve minutes?"
     )
+    if args.compare:
+        levels = [0, 1, 2]
+    elif args.expressivity is not None:
+        levels = [args.expressivity]
+    else:
+        levels = [int(settings.get("deepgram.tts_expressivity", 0))]
 
-    async def synth():
-        tts = TextToSpeech(key, voice)
+    async def synth(level: int):
+        tts = TextToSpeech(key, voice, level)
         try:
             return await tts.synthesize(text)
         finally:
             await tts.close()
 
-    print(f"Voice: {voice}")
-    audio = asyncio.run(synth())
     sd = _sd()
-    sd.play(audio, TTS_RATE)
-    sd.wait()
+    for level in levels:
+        print(f"Voice: {voice}, expressivity {level}", flush=True)
+        sd.play(asyncio.run(synth(level)), TTS_RATE)
+        sd.wait()
+        time.sleep(0.6)
+    if len(levels) > 1 or args.expressivity is not None:
+        print("To keep a level, set deepgram.tts_expressivity in config/settings.yaml.")
 
 
 def cmd_practice(args: argparse.Namespace, settings: Settings) -> None:
@@ -377,6 +387,8 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("voice-test", help="hear the agent's voice on your laptop speakers")
     p.add_argument("text", nargs="?", help="what to say (default: the opening line)")
     p.add_argument("--voice", help="try another voice, e.g. flux-meena-en")
+    p.add_argument("--expressivity", type=int, choices=[-2, -1, 0, 1, 2], help="-2 calm ... 2 animated")
+    p.add_argument("--compare", action="store_true", help="play expressivity 0, 1 and 2 one after another")
     p.set_defaults(func=cmd_voice_test)
     p = sub.add_parser("audio-test", help="test call audio routing during a manual call")
     p.add_argument("--seconds", type=int, default=15)

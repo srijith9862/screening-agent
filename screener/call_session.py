@@ -56,7 +56,11 @@ class CallSession:
             endpointing_ms=int(settings.get("deepgram.endpointing_ms", 400)),
             utterance_end_ms=int(settings.get("deepgram.utterance_end_ms", 1200)),
         )
-        self.tts = TextToSpeech(deepgram_key, settings.get("deepgram.tts_voice", "aura-2-thalia-en"))
+        self.tts = TextToSpeech(
+            deepgram_key,
+            settings.get("deepgram.tts_voice", "flux-priya-en"),
+            int(settings.get("deepgram.tts_expressivity", 0)),
+        )
         self.engine = AudioEngine(in_device, out_device, self.stt.feed, self.recorder)
         self.brain = brain or Brain(settings, candidate)
         self.transcript: list[dict[str, Any]] = []

@@ -1,5 +1,6 @@
-# Secrets
+# Secrets and per-laptop settings
 .env
+config/settings.local.yaml
 
 # Candidate data and call outputs contain personal information. Never commit.
 data/*

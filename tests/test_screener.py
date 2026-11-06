@@ -71,6 +71,17 @@ def test_sample_csv_loads():
 # --- config and prompts ---------------------------------------------------------
 
 
+def test_local_settings_override(tmp_path):
+    import shutil
+
+    config = tmp_path / "config"
+    shutil.copytree(ROOT / "config", config)
+    (config / "settings.local.yaml").write_text("phone:\n  adb_path: 'C:\\x\\adb.exe'\n", encoding="utf-8")
+    s = load_settings(config)
+    assert s.get("phone.adb_path") == "C:\\x\\adb.exe"
+    assert s.get("phone.default_country_code") == "+91"  # other keys kept
+
+
 def test_fill_leaves_unknown_placeholders():
     assert fill("Hi {first_name}, {missing}", {"first_name": "Asha"}) == "Hi Asha, {missing}"
 

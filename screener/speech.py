@@ -131,14 +131,17 @@ def split_sentences(text: str) -> list[str]:
     return parts or ([text.strip()] if text.strip() else [])
 
 
-def speak_request(voice: str) -> tuple[str, dict[str, Any]]:
+def speak_request(voice: str, expressivity: int = 0) -> tuple[str, dict[str, Any]]:
     """URL and query parameters for a Deepgram voice.
 
-    Flux voices (e.g. flux-priya-en, Indian English) use /v2/speak;
-    Aura voices (e.g. aura-2-thalia-en) use /v1/speak.
+    Flux voices (e.g. flux-priya-en, Indian English) use /v2/speak and accept
+    `expressivity` (-2 calm ... 2 animated, beta). Aura voices (e.g.
+    aura-2-thalia-en) use /v1/speak and ignore it.
     """
     params: dict[str, Any] = {"model": voice, "encoding": "linear16", "sample_rate": TTS_RATE}
     if voice.startswith("flux-"):
+        if expressivity:
+            params["expressivity"] = int(expressivity)
         return DG_SPEAK_V2_URL, params
     return DG_SPEAK_URL, {**params, "container": "none"}
 
@@ -152,13 +155,14 @@ def decode_pcm16(data: bytes) -> np.ndarray:
 
 
 class TextToSpeech:
-    def __init__(self, api_key: str, voice: str) -> None:
+    def __init__(self, api_key: str, voice: str, expressivity: int = 0) -> None:
         self._client = httpx.AsyncClient(timeout=20)
         self._api_key = api_key
         self._voice = voice
+        self._expressivity = expressivity
 
     async def synthesize(self, text: str) -> np.ndarray:
-        url, params = speak_request(self._voice)
+        url, params = speak_request(self._voice, self._expressivity)
         response = await self._client.post(
             url,
             params=params,
