@@ -65,7 +65,7 @@ call:
   max_silences: 2            # end the call after this many nudges in a row
   gap_between_calls_s: 90    # pause between calls (helps avoid spam flagging)
   confirm_before_each_call: true
-  calling_hours: "10:00-19:00"   # IST; calls outside this window are skipped
+  calling_hours: "10:00-21:30"   # IST; no new calls start outside this window
   timezone: Asia/Kolkata
 
 storage:

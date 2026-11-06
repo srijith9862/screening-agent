@@ -141,7 +141,7 @@ Both write a scorecard to `output/` so you can check the scoring too.
 screener call
 ```
 - Asks before each call (`Y` / `s`kip / `q`uit). Add `--yes` to stop asking, `--name "Kiran"` to call one person.
-- Only calls inside `calling_hours` (10:00–19:00 IST by default) and waits `gap_between_calls_s` between calls.
+- Only calls inside `calling_hours` (10:00–21:30 IST by default) and waits `gap_between_calls_s` between calls.
 - Skips anyone already screened (outcome completed / declined / not interested). `--redo` calls them again. No-answers and call-backs are retried on the next run.
 - Press `Ctrl+C` to stop at any time; the phone call is hung up.
 
