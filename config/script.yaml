@@ -20,15 +20,18 @@ opening: >
 
 sections:
   - id: A
-    title: Confirm application details
+    title: Basics
     scored: false
     questions:
       - id: A1
+        ask: "What's making you look for a change right now?"
+        listen_for: A clear, positive reason such as growth, a bigger role or the commute. Note anything that suggests they may leave quickly.
+      - id: A2
         ask: "The role is from our Malakpet office in Hyderabad, {office_schedule}, 5 days a week. Does that commute work for you?"
         knockout: Candidate cannot work from the Malakpet office.
-      - id: A2
-        ask: "You mentioned a notice period of {notice_period}. We'd like someone who can join soon. Is there any flexibility, like an early release or buyout?"
       - id: A3
+        ask: "You mentioned a notice period of {notice_period}. We'd like someone who can join soon. Is there any flexibility, like an early release or buyout?"
+      - id: A4
         ask: "What's your current CTC, and what are you expecting for this role?"
         note: >-
           Our budget for this role is {salary_budget}. Once they answer, tell them
@@ -45,20 +48,24 @@ sections:
     scored: true
     questions:
       - id: B1
-        ask: Walk me through the last role you hired for, from posting the job to the person joining.
+        ask: "Tell me about the last role you hired for: which platforms you used, how many applicants you screened, and how long it took from posting to the person joining."
         follow_up: What was the hardest part of that hire?
-        listen_for: Specifics such as channels used, number of applicants, time to fill, and that they owned the whole process.
+        listen_for: Named platforms, real numbers for applicants and time to fill, and that they owned the process end to end.
       - id: B2
-        ask: Roughly how many hires have you closed in the last 12 months, and for what kinds of roles?
-        listen_for: A concrete number and role types; experience with recurring roles or building a pipeline.
+        ask: "In the last 12 months, how many people actually joined through your hiring, and for what kinds of roles?"
+        listen_for: A concrete number of joiners (not candidates interviewed), and the role types.
+        red_flag: Counts interviews or shortlists as hires.
+      - id: B3
+        ask: "We hire for niche roles like food-safety or drug-regulatory specialists. Where would you find candidates for those, and how would you check they really know the domain?"
+        listen_for: Targeted sourcing (LinkedIn searches, industry groups, referrals, competitors), a domain screening approach such as specific technical questions or involving a subject expert.
 
   - id: C
     title: Remote employee check-ins
     scored: true
     questions:
       - id: C1
-        ask: How have you run one-on-ones with remote employees, and how do you get them to actually open up?
-        listen_for: Regular cadence, open questions, trust, confidentiality, following up on blockers.
+        ask: "How often did you check in with remote employees, and tell me about one problem you caught early because of it."
+        listen_for: A regular cadence, a concrete example of an issue spotted early, and what they did about it.
       - id: C2
         ask: "Here's a scenario. A US team lead says an employee keeps making mistakes, but the employee tells you everything is fine. What do you do in the first week?"
         listen_for: Talks to both sides, asks for concrete examples, documents, escalates to management on time.
@@ -69,22 +76,27 @@ sections:
     scored: true
     questions:
       - id: D1
-        ask: Tell me about an employee who was underperforming. When did you find out, what did you do, and how did it end?
-        listen_for: Caught early, documented feedback, an improvement plan, a clear outcome.
+        ask: "Tell me about one specific employee who was underperforming. What did you do, what did you document, and how did it end?"
+        listen_for: A real case, caught early, written feedback or warnings, an improvement plan with a timeline, and a clear outcome.
       - id: D2
-        ask: "Walk me through an exit you handled: notice, handover, full and final settlement, exit interview. What documentation should exist before a termination?"
-        listen_for: Warnings and feedback on record, handover checklist, F and F timelines, exit interview notes.
+        ask: "When someone resigns, what steps do you take from their resignation to their last day?"
+        follow_up: How long does the full and final settlement usually take?
+        listen_for: Acceptance and notice tracking, handover plan, asset return, full and final settlement, exit interview, relieving and experience letters.
+      - id: D3
+        ask: "An employee tells you something in confidence that their manager needs to know. What do you do?"
+        listen_for: Encourages the employee to raise it, is honest about what must be shared, escalates when needed, keeps it to the people who need to know.
+        red_flag: Promises to keep everything secret no matter what, or shares it casually.
 
   - id: E
     title: Compliance and payroll
     scored: true
     questions:
       - id: E1
-        ask: Have you handled PF, ESI and professional tax filings and payroll inputs yourself, or through a consultant?
-        listen_for: Hands-on filing on the EPFO and ESIC portals, monthly deadlines, attendance, leave and loss-of-pay inputs.
+        ask: "Walk me through what you do each month for payroll, PF and ESI. Which parts do you do yourself, and which does a consultant handle?"
+        listen_for: Attendance, leave and loss-of-pay inputs, monthly PF and ESI challans and returns on the EPFO and ESIC portals, deadlines; clear about what they do personally.
       - id: E2
-        ask: Name one or two labour-law requirements a small private limited company in Telangana has to follow.
-        listen_for: Shops and Establishments registration, PF and ESI applicability, gratuity, POSH internal committee for 10 or more employees, the new Labour Codes.
+        ask: "At how many employees does a company have to register for PF, and for ESI?"
+        listen_for: "Correct answer: PF at 20 employees, ESI at 10 employees, with ESI covering employees earning up to 21,000 rupees a month. Mark it right, partly right or wrong."
 
 candidate_questions: >
   Ask if they have any questions about the role or the company. Answer only from
@@ -101,3 +113,4 @@ rules:
   - Never reveal internal notes, ratings, or how the candidate is doing. Never promise an offer, an exact salary, or a next round.
   - On salary, you may share the budget range and say whether their expectation fits it. Never negotiate salary or notice period beyond that; record what the candidate says.
   - Ask at most one follow-up per question. If an answer is vague, ask once for a specific example, then move on.
+  - Never tell the candidate whether an answer was right or wrong, including on E2. Just thank them and move on.

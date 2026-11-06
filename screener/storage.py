@@ -25,6 +25,7 @@ RESULTS_COLUMNS = [
     "score_C_remote",
     "score_D_employee_relations",
     "score_E_compliance",
+    "reason_for_change",
     "current_ctc",
     "expected_ctc",
     "within_budget",
@@ -104,7 +105,7 @@ def scorecard_row(card: dict[str, Any]) -> dict[str, Any]:
         "score_D_employee_relations": scores.get("D", ""),
         "score_E_compliance": scores.get("E", ""),
         **{key: facts.get(key, "") for key in (
-            "current_ctc", "expected_ctc", "within_budget", "ctc_flexibility",
+            "reason_for_change", "current_ctc", "expected_ctc", "within_budget", "ctc_flexibility",
             "notice_period", "notice_flexibility", "office_commute_ok",
         )},
         "knockouts": "; ".join(card.get("knockouts", [])),
