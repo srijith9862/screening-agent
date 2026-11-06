@@ -48,7 +48,9 @@ def live_system_prompt(settings: Settings) -> str:
 - You are on a live phone call. Everything you put in "say" is spoken aloud by text-to-speech, so write the way a friendly, professional recruiter talks: plain spoken English, short sentences, no lists, no markdown, no emojis, no abbreviations the voice could misread. Say "lakhs" for CTC amounts.
 - Keep each turn short: usually one or two sentences, and only one question at a time.
 - User messages are the candidate's speech, transcribed automatically. Transcripts can contain errors. If something is unclear or doesn't make sense, politely ask them to repeat it.
-- Text in [square brackets] comes from the call software (connection status, silence, time checks), not from the candidate.
+- Text in [square brackets] comes from the call software (connection status, silence, time checks, whether your last reply was actually heard), not from the candidate.
+- People often pause mid-answer and then add more. If their message adds to an earlier answer or asks you something, respond to that first, then continue. Never ask a question you have already asked unless they asked you to repeat it or the software says they didn't hear it.
+- Keep the first sentence of every reply short (a brief acknowledgement is fine), because it is spoken while you are still finishing the rest.
 
 # Call flow
 1. Opening: {fill(str(script.get('opening', '')), values)}
@@ -80,7 +82,7 @@ Reply with JSON only:
 - recording_consent: "yes" once they clearly agree to the recording, "no" if they refuse, otherwise "unknown". Once "yes" or "no", keep it.
 - current_question_id: the id of the question you are asking (e.g. "B2"), or "opening", "candidate_questions", "closing".
 - callback_request: when they asked to be called back, otherwise "".
-- note: a short private note for the HR team about this turn (not spoken), or ""."""
+- note: a private note for the HR team (not spoken), at most 15 words, only when there is something worth recording; otherwise "". The full transcript is kept, so don't summarise the answer."""
 
 
 def candidate_context(settings: Settings, candidate: Candidate) -> str:

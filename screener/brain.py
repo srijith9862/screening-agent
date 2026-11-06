@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -34,6 +36,39 @@ TURN_SCHEMA: dict[str, Any] = {
 }
 
 REPEAT_LINE = "Sorry, could you say that again?"
+
+_SAY_START = re.compile(r'"say"\s*:\s*"')
+
+
+def partial_say(json_prefix: str) -> str:
+    """The (possibly unfinished) value of "say" in a JSON reply that is still streaming."""
+    match = _SAY_START.search(json_prefix)
+    if not match:
+        return ""
+    raw = []
+    i = match.end()
+    while i < len(json_prefix):
+        ch = json_prefix[i]
+        if ch == "\\":
+            if i + 1 >= len(json_prefix):
+                break  # escape not complete yet
+            if json_prefix[i + 1] == "u":
+                if i + 6 > len(json_prefix):
+                    break
+                raw.append(json_prefix[i : i + 6])
+                i += 6
+                continue
+            raw.append(json_prefix[i : i + 2])
+            i += 2
+            continue
+        if ch == '"':
+            break
+        raw.append(ch)
+        i += 1
+    try:
+        return json.loads('"' + "".join(raw) + '"')
+    except json.JSONDecodeError:
+        return ""
 
 
 @dataclass
@@ -77,27 +112,43 @@ class Brain:
             {"type": "text", "text": candidate_context(self.settings, self.candidate)},
         ]
 
-    async def respond(self, user_text: str) -> AgentTurn:
+    async def respond(
+        self, user_text: str, on_say: Callable[[str], None] | None = None
+    ) -> AgentTurn:
         """Sends one candidate turn and returns what the agent says next.
 
-        History is only appended once a reply arrives, so a cancelled call
-        (e.g. the candidate kept talking) leaves no trace and can be retried
-        with the combined text.
+        With `on_say`, the reply is streamed and `on_say` receives the "say"
+        text as it grows, so speech can start before the reply is finished.
+
+        History is only appended once the whole reply arrives, so a cancelled
+        call (e.g. the candidate kept talking) leaves no trace and can be
+        retried with the combined text.
         """
         request_messages = self.messages + [{"role": "user", "content": user_text}]
+        params = dict(
+            model=self.settings.get("claude.live_model", "claude-opus-5-5"),
+            max_tokens=4000,
+            system=self._system,
+            messages=request_messages,
+            output_config={
+                "effort": self.settings.get("claude.live_effort", "low"),
+                "format": {"type": "json_schema", "schema": TURN_SCHEMA},
+            },
+            betas=[FALLBACK_BETA],
+            fallbacks="default",
+        )
         try:
-            response = await self.client.beta.messages.create(
-                model=self.settings.get("claude.live_model", "claude-opus-5-5"),
-                max_tokens=4000,
-                system=self._system,
-                messages=request_messages,
-                output_config={
-                    "effort": self.settings.get("claude.live_effort", "low"),
-                    "format": {"type": "json_schema", "schema": TURN_SCHEMA},
-                },
-                betas=[FALLBACK_BETA],
-                fallbacks="default",
-            )
+            if on_say is None:
+                response = await self.client.beta.messages.create(**params)
+            else:
+                buffer = ""
+                async with self.client.beta.messages.stream(**params) as stream:
+                    async for chunk in stream.text_stream:
+                        buffer += chunk
+                        say_so_far = partial_say(buffer)
+                        if say_so_far:
+                            on_say(say_so_far)
+                    response = await stream.get_final_message()
         except anthropic.APIConnectionError:
             log.exception("Claude connection error")
             return AgentTurn(say=REPEAT_LINE)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -17,7 +18,20 @@ from .speech import TTS_RATE, SpeechEvent, SpeechToText, TextToSpeech, split_sen
 
 log = logging.getLogger(__name__)
 
+# Words the candidate must say while the agent is talking to interrupt it.
 BARGE_IN_MIN_WORDS = 3
+# Words that show the candidate is still talking while the agent prepares a reply.
+STILL_TALKING_MIN_WORDS = 2
+# After the candidate's last partial words, wait this long for their turn to end
+# before replying anyway (in case the end-of-speech signal never arrives).
+CANDIDATE_TALKING_GRACE_S = 2.5
+_SENTENCE_END = re.compile(r"[.!?][\"')]?\s+")
+
+
+def complete_sentences_end(text: str) -> int:
+    """Index just after the last complete sentence in `text` (0 if none yet)."""
+    ends = [m.end() for m in _SENTENCE_END.finditer(text)]
+    return ends[-1] if ends else 0
 
 
 @dataclass
@@ -30,6 +44,27 @@ class CallResult:
     recorder: Recorder | None = None
     duration_s: float = 0.0
     ended_by: str = ""
+
+
+@dataclass
+class Reply:
+    """One agent turn: Claude (streamed) -> sentences -> voice -> call."""
+
+    message: str  # what was sent to Claude
+    consumed_text: str  # candidate words included in the message
+    consumed_notes: list[str]
+    started_at: float
+    task: asyncio.Task[None] | None = None
+    brain_done: bool = False  # Claude finished: history now contains this reply
+    handled: bool = False  # turn applied by the conversation loop
+    turn: AgentTurn | None = None
+    queued: list[str] = field(default_factory=list)  # sentences sent to the voice
+    played: int = 0  # sentences handed to the speaker
+    first_audio_at: float | None = None
+
+    @property
+    def spoken(self) -> str:
+        return " ".join(self.queued[: self.played])
 
 
 class CallSession:
@@ -65,8 +100,6 @@ class CallSession:
         self.brain = brain or Brain(settings, candidate)
         self.transcript: list[dict[str, Any]] = []
         self._t0 = 0.0
-        self._interrupted = False
-        self._speaking_text = ""
 
     # --- helpers -----------------------------------------------------------
 
@@ -77,38 +110,80 @@ class CallSession:
         self.transcript.append({"t": round(self._elapsed(), 1), "speaker": speaker, "text": text, **extra})
         if self.echo:
             label = {"agent": self.s.agent_name, "candidate": self.candidate.first_name}.get(speaker, speaker)
+            if "latency_s" in extra:
+                label += f" ({extra['latency_s']}s)"
+            if extra.get("interrupted"):
+                text += "  [cut off]"
             print(f"  [{int(self._elapsed()) // 60:02d}:{int(self._elapsed()) % 60:02d}] {label}: {text}", flush=True)
 
-    async def _speak(self, text: str) -> None:
-        sentences = split_sentences(text)
-        if not sentences:
-            return
-        self._interrupted = False
-        self._speaking_text = text
-        # Synthesize all sentences in parallel, play them in order as each is ready.
-        jobs = [asyncio.create_task(self.tts.synthesize(sentence)) for sentence in sentences]
-        try:
-            for job in jobs:
-                audio = await job
-                if self._interrupted:
-                    break
+    def _say(self, text: str) -> None:
+        if self.echo:
+            print(f"  {text}", flush=True)
+
+    # --- one agent reply -----------------------------------------------------
+
+    async def _run_reply(self, reply: Reply) -> None:
+        """Streams Claude's reply and speaks each sentence as soon as it is complete."""
+        jobs: asyncio.Queue[asyncio.Task[Any] | None] = asyncio.Queue()
+        emitted = ""
+
+        def queue_sentence(sentence: str) -> None:
+            reply.queued.append(sentence)
+            jobs.put_nowait(asyncio.create_task(self.tts.synthesize(sentence)))
+
+        def on_say(say_so_far: str) -> None:
+            nonlocal emitted
+            if not say_so_far.startswith(emitted):
+                return
+            cut = complete_sentences_end(say_so_far[len(emitted):])
+            if cut:
+                for sentence in split_sentences(say_so_far[len(emitted): len(emitted) + cut]):
+                    queue_sentence(sentence)
+                emitted = say_so_far[: len(emitted) + cut]
+
+        async def play_in_order() -> None:
+            while True:
+                job = await jobs.get()
+                if job is None:
+                    return
+                try:
+                    audio = await job
+                except Exception as exc:  # noqa: BLE001 - skip a sentence rather than drop the call
+                    log.error("Voice synthesis failed: %s", exc)
+                    continue
+                if reply.first_audio_at is None:
+                    reply.first_audio_at = time.monotonic()
                 self.engine.play(audio, TTS_RATE)
+                reply.played += 1
+
+        player = asyncio.create_task(play_in_order())
+        try:
+            turn = await self.brain.respond(reply.message, on_say=on_say)
+            reply.turn = turn
+            reply.brain_done = True
+            rest = turn.say[len(emitted):] if turn.say.startswith(emitted) else ("" if emitted else turn.say)
+            for sentence in split_sentences(rest):
+                queue_sentence(sentence)
+            jobs.put_nowait(None)
+            await player
         finally:
-            for job in jobs:
-                job.cancel()
-        self._log("agent", text)
+            if not player.done():
+                player.cancel()
+            while not jobs.empty():
+                job = jobs.get_nowait()
+                if job is not None:
+                    job.cancel()
 
-    def _barge_in(self) -> None:
-        if not self.engine.player.is_idle():
-            self.engine.player.clear()
-            self._interrupted = True
-            if self.transcript and self.transcript[-1]["speaker"] == "agent":
-                self.transcript[-1]["interrupted"] = True
-
-    def _apply_turn(self, turn: AgentTurn) -> None:
-        if self.brain.consent == "no" and self.recorder.enabled:
-            self.recorder.discard()
-            log.info("Recording consent refused: recording discarded")
+    def _log_reply(self, reply: Reply, interrupted: bool) -> None:
+        text = reply.spoken if interrupted else " ".join(reply.queued)
+        if not text:
+            return
+        extra: dict[str, Any] = {}
+        if reply.first_audio_at is not None:
+            extra["latency_s"] = round(reply.first_audio_at - reply.started_at, 1)
+        if interrupted:
+            extra["interrupted"] = True
+        self._log("agent", text, **extra)
 
     # --- phases ------------------------------------------------------------
 
@@ -154,12 +229,8 @@ class CallSession:
             await asyncio.sleep(0.1)
         return False
 
-    def _say(self, text: str) -> None:
-        if self.echo:
-            print(f"  {text}", flush=True)
-
     async def _route_audio_to_laptop(self) -> None:
-        """Calls dialed on the phone stay on its earpiece; switch them to the laptop (Bluetooth)."""
+        """Calls dialed on the phone may stay on its earpiece; switch them to the laptop (Bluetooth)."""
         assert self.phone is not None
         try:
             button = await self.phone.bluetooth_button()
@@ -169,12 +240,13 @@ class CallSession:
             if await self._call_audio_arriving(4):
                 self._say("Call audio: reaching the laptop.")
                 return
+            if button is None:
+                self._say("Call audio: no Bluetooth button visible on the phone; assuming audio is on the laptop.")
+                return
             outcome = await self.phone.tap_bluetooth(str(self.s.get("phone.bluetooth_device_name") or ""))
             self._say(f"Call audio: {outcome}.")
-            if not await self._call_audio_arriving(6):
-                self._say("! No call audio on the laptop yet. If the candidate can't hear the agent, tap Bluetooth on the phone.")
         except PhoneError as exc:
-            self._say(f"! Couldn't switch call audio automatically ({exc}). Tap Bluetooth on the phone.")
+            self._say(f"! Couldn't check the call audio route ({exc}).")
 
     def _drain_events(self) -> None:
         while not self.stt.events.empty():
@@ -239,35 +311,77 @@ class CallSession:
         silence_s = float(self.s.get("call.silence_timeout_s", 10))
         max_silences = int(self.s.get("call.max_silences", 2))
 
-        pending_text = ""
-        respond_task: asyncio.Task[AgentTurn] | None = None
-        speak_task: asyncio.Task[None] | None = None
+        pending_text = ""  # candidate words the agent hasn't replied to yet
+        pending_notes: list[str] = [first_message]  # [bracketed] notes for the next reply
+        reply: Reply | None = None
         wrap_sent = False
         silences = 0
         last_activity = time.monotonic()
         last_state_check = 0.0
+        last_partial_at = 0.0  # when the candidate was last heard mid-sentence
         ending = False
 
-        def start_respond(text: str) -> asyncio.Task[AgentTurn]:
-            nonlocal wrap_sent
-            notes = []
-            if self._interrupted:
-                notes.append("[The candidate started talking while you were speaking, so they may not have heard all of your last message.]")
-                self._interrupted = False
+        def start_reply() -> None:
+            nonlocal reply, wrap_sent
+            notes = list(pending_notes)
+            extra = []
             if not wrap_sent and self._elapsed() > wrap_s:
-                notes.append(f"[Time check: {int(self._elapsed() // 60)} minutes have passed. Start wrapping up now.]")
+                extra.append(f"[Time check: {int(self._elapsed() // 60)} minutes have passed. Start wrapping up now.]")
                 wrap_sent = True
             if self._elapsed() > max_s:
-                notes.append("[Time is up. Thank the candidate, say goodbye and end the call now.]")
-            message = "\n".join(notes + ([text] if text else []))
-            return asyncio.create_task(self.brain.respond(message))
+                extra.append("[Time is up. Thank the candidate, say goodbye and end the call now.]")
+            message = "\n".join(notes + extra + ([pending_text] if pending_text else []))
+            reply = Reply(message=message, consumed_text=pending_text, consumed_notes=notes, started_at=time.monotonic())
+            reply.task = asyncio.create_task(self._run_reply(reply))
 
-        respond_task = start_respond(first_message)
+        def cancel_reply() -> None:
+            """Stops the current reply (candidate kept talking or interrupted)."""
+            nonlocal reply
+            if reply is None:
+                return
+            assert reply.task is not None
+            if reply.brain_done and not reply.handled:
+                handle_finished_thinking(reply)  # its words are in the history now
+            reply.task.cancel()
+            self.engine.player.clear()
+            if reply.brain_done and reply.turn is not None:
+                if reply.played == 0:
+                    pending_notes.append(
+                        f'[Your last reply was not spoken because the candidate kept talking: "{reply.turn.say}". '
+                        "They have not heard it.]"
+                    )
+                else:
+                    pending_notes.append(
+                        f'[The candidate started talking while you were speaking. They only heard: "{reply.spoken}"]'
+                    )
+            elif reply.played:
+                pending_notes.append(f'[You were interrupted after saying: "{reply.spoken}". The rest was not heard.]')
+            self._log_reply(reply, interrupted=True)
+            reply = None
+
+        def handle_finished_thinking(r: Reply) -> None:
+            """Claude has replied: the words and notes it saw are now answered."""
+            nonlocal pending_text, ending
+            r.handled = True
+            if pending_text.startswith(r.consumed_text):
+                pending_text = pending_text[len(r.consumed_text):].strip()
+            for note in r.consumed_notes:
+                if note in pending_notes:
+                    pending_notes.remove(note)
+            assert r.turn is not None
+            if self.brain.consent == "no" and self.recorder.enabled:
+                self.recorder.discard()
+                log.info("Recording consent refused: recording discarded")
+            if r.turn.note and self.echo:
+                print(f"           (note: {r.turn.note})", flush=True)
+            if r.turn.end_call:
+                ending = True
+
+        start_reply()
 
         while True:
             now = time.monotonic()
-            # Hard limit, with one minute of grace for the goodbye.
-            if self._elapsed() > max_s + 60:
+            if self._elapsed() > max_s + 60:  # one minute of grace for the goodbye
                 return "time_limit"
 
             # Did the candidate hang up?
@@ -275,38 +389,36 @@ class CallSession:
                 last_state_check = now
                 try:
                     if await self.phone.call_state() == CALL_STATE_IDLE:
-                        if respond_task:
-                            respond_task.cancel()
+                        if reply is not None and reply.task is not None:
+                            reply.task.cancel()
                         return "candidate_hung_up"
                 except PhoneError:
                     pass
 
-            # A reply is ready: speak it.
-            if respond_task is not None and respond_task.done():
-                try:
-                    turn = respond_task.result()
-                except asyncio.CancelledError:
-                    turn = None
-                respond_task = None
-                if turn is not None:
-                    pending_text = ""
-                    self._apply_turn(turn)
-                    if turn.note and self.echo:
-                        print(f"           (note: {turn.note})", flush=True)
-                    speak_task = asyncio.create_task(self._speak(turn.say)) if turn.say else None
-                    if turn.end_call:
-                        ending = True
+            # Progress of the current reply.
+            if reply is not None:
+                if reply.brain_done and not reply.handled:
+                    handle_finished_thinking(reply)
+                assert reply.task is not None
+                if reply.task.done():
+                    if not reply.task.cancelled() and reply.task.exception() is not None:
+                        log.error("Reply failed: %s", reply.task.exception())
+                    self._log_reply(reply, interrupted=False)
+                    reply = None
 
-            if ending and respond_task is None:
-                if speak_task is not None:
-                    await speak_task
+            if ending and reply is None:
                 await self.engine.wait_until_played()
                 await asyncio.sleep(0.8)
                 return "agent_ended"
 
+            # Reply to whatever the candidate said, once both sides have finished talking.
+            candidate_talking = time.monotonic() - last_partial_at < CANDIDATE_TALKING_GRACE_S
+            if reply is None and pending_text and self.engine.player.is_idle() and not candidate_talking:
+                start_reply()
+
             # Speech events.
             try:
-                event: SpeechEvent | None = await asyncio.wait_for(self.stt.events.get(), timeout=0.2)
+                event: SpeechEvent | None = await asyncio.wait_for(self.stt.events.get(), timeout=0.1)
             except asyncio.TimeoutError:
                 event = None
 
@@ -315,22 +427,25 @@ class CallSession:
                     return "speech_error"
                 last_activity = time.monotonic()
                 silences = 0
-                if event.kind == "partial" and len(event.text.split()) >= BARGE_IN_MIN_WORDS:
-                    self._barge_in()
+                words = len(event.text.split())
+                if event.kind == "partial" and words:
+                    last_partial_at = time.monotonic()
+                if event.kind == "partial" and reply is not None and not ending:
+                    agent_audible = reply.played > 0 or not self.engine.player.is_idle()
+                    if agent_audible and words >= BARGE_IN_MIN_WORDS:
+                        cancel_reply()  # candidate is talking over the agent
+                    elif not agent_audible and words >= STILL_TALKING_MIN_WORDS:
+                        cancel_reply()  # candidate is still talking; reply once they finish
                 elif event.kind == "turn_end":
+                    last_partial_at = 0.0  # they've finished this stretch of speech
                     self._log("candidate", event.text)
                     pending_text = f"{pending_text} {event.text}".strip()
-                    # Still thinking about the previous words? Restart with everything they said.
-                    if respond_task is not None:
-                        respond_task.cancel()
-                    respond_task = start_respond(pending_text)
+                    if reply is not None and reply.played == 0 and not ending:
+                        cancel_reply()  # not spoken yet: redo it with everything they said
                 continue
 
             # Silence handling (only when nobody is talking and nothing is pending).
-            agent_busy = respond_task is not None or not self.engine.player.is_idle() or (
-                speak_task is not None and not speak_task.done()
-            )
-            if agent_busy:
+            if reply is not None or not self.engine.player.is_idle() or pending_text:
                 last_activity = time.monotonic()
             elif time.monotonic() - last_activity > silence_s:
                 silences += 1
@@ -338,7 +453,12 @@ class CallSession:
                 if silences > max_silences:
                     return "silence"
                 if silences == max_silences:
-                    note = "[Still no response. Say the line seems unclear, that the team will try again later, say goodbye and end the call.]"
+                    pending_notes.append(
+                        "[Still no response. Say the line seems unclear, that the team will try again later, "
+                        "say goodbye and end the call.]"
+                    )
                 else:
-                    note = f"[The candidate has been silent for {int(silence_s)} seconds. Check if they can hear you.]"
-                respond_task = start_respond(note)
+                    pending_notes.append(
+                        f"[The candidate has been silent for {int(silence_s)} seconds. Check if they can hear you.]"
+                    )
+                start_reply()

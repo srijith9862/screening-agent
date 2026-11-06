@@ -310,6 +310,137 @@ def test_budget_check_catches_ranges():
     assert not BUDGET_PATTERN.search("Salary is discussed in the next round.")
 
 
+def test_partial_say_while_streaming():
+    from screener.brain import partial_say
+
+    assert partial_say('{"sa') == ""
+    assert partial_say('{"say": "Got it, thanks. How many hi') == "Got it, thanks. How many hi"
+    assert partial_say('{"say": "She said \\"hi\\"') == 'She said "hi"'
+    assert partial_say('{"say": "ends with escape \\') == "ends with escape "
+    assert partial_say('{"say": "Done.", "end_call": false') == "Done."
+
+
+def test_complete_sentences_end():
+    from screener.call_session import complete_sentences_end
+
+    assert complete_sentences_end("Got it, thanks. How many hi") == len("Got it, thanks. ")
+    assert complete_sentences_end("No full stop yet") == 0
+    assert complete_sentences_end("One. Two? Three") == len("One. Two? ")
+
+
+def _fake_session(settings, brain):
+    """A CallSession with fake speech, voice, audio and phone, for turn-taking tests."""
+    from screener.call_session import CallSession
+
+    session = object.__new__(CallSession)
+    session.s = settings
+    session.candidate = Candidate(name="Ruthwik Reddy")
+    session.phone = None
+    session.echo = False
+    session.recorder = Recorder()
+    session.transcript = []
+    session._t0 = 0.0
+    session.brain = brain
+    session.stt = SimpleNamespace(events=asyncio.Queue())
+
+    class FakeTTS:
+        async def synthesize(self, text):
+            await asyncio.sleep(0.01)
+            return np.zeros(10, np.float32)
+
+    session.tts = FakeTTS()
+
+    async def wait_until_played():
+        return None
+
+    session.engine = SimpleNamespace(
+        player=SimpleNamespace(is_idle=lambda: True, clear=lambda: None),
+        play=lambda audio, rate: None,
+        wait_until_played=wait_until_played,
+        input_level=0.0,
+    )
+    return session
+
+
+class ScriptedBrain:
+    def __init__(self, turns, think_s=0.3):
+        from screener.brain import AgentTurn
+
+        self.turns = [AgentTurn(**t) for t in turns]
+        self.think_s = think_s
+        self.messages = []
+        self.consent = "unknown"
+        self.notes = []
+        self.callback_request = ""
+
+    async def respond(self, message, on_say=None):
+        self.messages.append(message)
+        await asyncio.sleep(self.think_s)
+        turn = self.turns.pop(0)
+        if on_say:
+            on_say(turn.say)
+        return turn
+
+
+def test_candidate_adding_to_answer_gets_one_reply(settings):
+    """'Yeah, that's correct.' <pause> 'And it's three years two months.' -> one combined reply."""
+    from screener.speech import SpeechEvent
+
+    brain = ScriptedBrain([
+        {"say": "Hi Ruthwik, is that experience correct?"},
+        {"say": "Thanks, noted three years two months. Does the commute work?"},
+        {"say": "Great, goodbye.", "end_call": True},
+    ])
+    session = _fake_session(settings, brain)
+
+    async def scenario():
+        conversation = asyncio.create_task(session._conversation("[Call connected]"))
+        await asyncio.sleep(0.5)  # opening reply spoken
+        await session.stt.events.put(SpeechEvent("turn_end", "Yeah, that's correct."))
+        await asyncio.sleep(0.1)  # agent is thinking...
+        await session.stt.events.put(SpeechEvent("partial", "And it's actually"))
+        await asyncio.sleep(0.1)
+        await session.stt.events.put(SpeechEvent("turn_end", "And it's actually three years two months."))
+        await asyncio.sleep(0.6)
+        await session.stt.events.put(SpeechEvent("turn_end", "Yes it works."))
+        return await asyncio.wait_for(conversation, timeout=5)
+
+    ended_by = asyncio.run(scenario())
+    assert ended_by == "agent_ended"
+    # The first reply attempt was dropped; the retry saw both fragments together.
+    assert "Yeah, that's correct. And it's actually three years two months." in brain.messages[2]
+    agent_lines = [t["text"] for t in session.transcript if t["speaker"] == "agent"]
+    assert agent_lines == [
+        "Hi Ruthwik, is that experience correct?",
+        "Thanks, noted three years two months. Does the commute work?",
+        "Great, goodbye.",
+    ]
+
+
+def test_words_after_reply_was_decided_are_not_resent(settings):
+    """If Claude already answered the words, they must not be sent again."""
+    from screener.speech import SpeechEvent
+
+    brain = ScriptedBrain([
+        {"say": "Hello, is now a good time?"},
+        {"say": "Great. First question?"},
+        {"say": "Thanks, goodbye.", "end_call": True},
+    ], think_s=0.2)
+    session = _fake_session(settings, brain)
+
+    async def scenario():
+        conversation = asyncio.create_task(session._conversation("[Call connected]"))
+        await asyncio.sleep(0.4)
+        await session.stt.events.put(SpeechEvent("turn_end", "Yes, sure."))
+        await asyncio.sleep(0.6)
+        await session.stt.events.put(SpeechEvent("turn_end", "My answer."))
+        return await asyncio.wait_for(conversation, timeout=5)
+
+    asyncio.run(scenario())
+    assert brain.messages[1].endswith("Yes, sure.")
+    assert brain.messages[2] == "My answer."
+
+
 # --- scorecard -----------------------------------------------------------------
 
 
