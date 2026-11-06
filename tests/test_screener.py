@@ -453,6 +453,15 @@ def test_candidate_adding_to_answer_gets_one_reply(settings):
     ]
 
 
+def test_pickup_greeting_detection():
+    from screener.call_session import is_pickup_greeting
+
+    for text in ["Hello?", "Hello. Hello?", "Hi.", "Yes, tell me.", "Haan ji.", "Who is this?", "Yeah, speaking."]:
+        assert is_pickup_greeting(text), text
+    for text in ["", "Tum hi ho, ab tum hi ho, zindagi ab tum hi ho", "The number you have dialled is busy"]:
+        assert not is_pickup_greeting(text), text
+
+
 def test_filler_and_trailing_off_detection():
     from screener.call_session import is_filler_only, trails_off
 
@@ -509,6 +518,44 @@ def test_after_premade_greeting_agent_waits_for_candidate(settings):
 
     asyncio.run(scenario())
     assert brain.messages[0] == "[Call connected. You already greeted them.]\nYes, speaking."
+
+
+def test_repeated_hello_does_not_restart_the_reply(settings):
+    from screener.speech import SpeechEvent
+
+    brain = ScriptedBrain([
+        {"say": "Hi, can you hear me? This is Priya."},
+        {"say": "Bye.", "end_call": True},
+    ], think_s=0.5)
+    session = _fake_session(settings, brain)
+
+    async def scenario():
+        conversation = asyncio.create_task(session._conversation("[greeted]", reply_now=False))
+        await session.stt.events.put(SpeechEvent("turn_end", "Hello?"))
+        await asyncio.sleep(0.2)
+        await session.stt.events.put(SpeechEvent("turn_end", "Hello?"))
+        await asyncio.sleep(0.2)
+        await session.stt.events.put(SpeechEvent("turn_end", "Hello?"))
+        await asyncio.sleep(0.6)
+        assert any(t["speaker"] == "agent" for t in session.transcript)  # answered within ~0.5 s of the first
+        await session.stt.events.put(SpeechEvent("turn_end", "Okay bye."))
+        return await asyncio.wait_for(conversation, timeout=5)
+
+    asyncio.run(scenario())
+    assert brain.messages[0] == "[greeted]\nHello?"
+
+
+def test_recent_attempts_are_not_redialled(tmp_path, settings):
+    from datetime import datetime, timedelta
+
+    settings.raw.setdefault("storage", {})["output_dir"] = str(tmp_path)
+    now = datetime.now()
+    storage.append_result(settings, {"phone": "+911", "outcome": "no_answer", "called_at": now.strftime("%Y-%m-%d %H:%M")})
+    old = (now - timedelta(hours=5)).strftime("%Y-%m-%d %H:%M")
+    storage.append_result(settings, {"phone": "+912", "outcome": "no_answer", "called_at": old})
+    storage.append_result(settings, {"phone": "+913", "outcome": "completed", "called_at": old})
+    assert storage.already_screened(settings, retry_after_hours=3) == {"+911", "+913"}
+    assert storage.already_screened(settings) == {"+913"}
 
 
 def test_words_after_reply_was_decided_are_not_resent(settings):

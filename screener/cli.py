@@ -395,7 +395,9 @@ def cmd_call(args: argparse.Namespace, settings: Settings) -> None:
         if input("There are TODOs in the config (above). Call anyway? [y/N] ").strip().lower() != "y":
             return
 
-    done = set() if args.redo else storage.already_screened(settings)
+    done = set() if args.redo else storage.already_screened(
+        settings, retry_after_hours=float(settings.get("call.retry_after_hours", 3))
+    )
     gap = int(settings.get("call.gap_between_calls_s", 90))
     confirm = settings.get("call.confirm_before_each_call", True) and not args.yes
     queue = [c for c in candidates if c.phone and c.phone not in done]

@@ -38,6 +38,17 @@ _TRAILING_OFF = re.compile(
 )
 
 
+# What people say when they pick up. Short phrases only, so caller-tune songs don't count.
+_PICKUP_GREETING = re.compile(
+    r"(?i)\b(hello|hallo|helo|hi|hey|yes|yeah|haan|ha|han|ji|speaking|who is (this|it)|who's this|bolo|bolie|boliye|namaste|namaskar)\b"
+)
+
+
+def is_pickup_greeting(text: str) -> bool:
+    words = re.findall(r"[\w']+", text)
+    return 0 < len(words) <= 5 and bool(_PICKUP_GREETING.search(text))
+
+
 def is_filler_only(text: str) -> bool:
     return bool(_FILLER_ONLY.match(text)) and not _AFFIRMATIVE.search(text)
 
@@ -240,6 +251,15 @@ class CallSession:
                 if time.monotonic() - start > 4 and await self.phone.call_state() == CALL_STATE_IDLE:
                     return None  # rejected, busy, or failed
                 if baseline is not None:
+                    # Either the phone reports the call as answered, or we hear "Hello?".
+                    greeting_heard = ""
+                    while not self.stt.events.empty():
+                        event = self.stt.events.get_nowait()
+                        if event.kind in ("final", "turn_end") and is_pickup_greeting(event.text):
+                            greeting_heard = event.text
+                    if greeting_heard:
+                        self._say(f"Picked up (heard: \"{greeting_heard}\").")
+                        return await answered(greeting_heard)
                     if await self.phone.active_count() > baseline:
                         self._drain_events()
                         return await answered("")
@@ -513,6 +533,11 @@ class CallSession:
                     if await self.phone.call_state() == CALL_STATE_IDLE:
                         if reply is not None and reply.task is not None:
                             reply.task.cancel()
+                            if reply.queued:
+                                self._log_reply(reply, interrupted=True)
+                            else:
+                                self._say(f"  (hung up while {self.s.agent_name} was still preparing a reply, "
+                                          f"{time.monotonic() - reply.started_at:.1f}s in)")
                         return "candidate_hung_up"
                 except PhoneError:
                     pass
@@ -571,7 +596,12 @@ class CallSession:
                         continue
                     if trails_off(pending_text):
                         hold_until = time.monotonic() + trailing_wait_s  # "...and" - probably more coming
-                    if reply is not None and reply.played == 0 and not ending:
+                    if (
+                        reply is not None
+                        and reply.played == 0
+                        and not ending
+                        and not is_pickup_greeting(event.text)  # repeated "Hello?": just answer, don't restart
+                    ):
                         cancel_reply()  # not spoken yet: redo it with everything they said
                 continue
 

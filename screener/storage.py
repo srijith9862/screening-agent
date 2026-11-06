@@ -77,16 +77,29 @@ def append_result(settings: Settings, row: dict[str, Any]) -> None:
         writer.writerow({k: row.get(k, "") for k in RESULTS_COLUMNS})
 
 
-def already_screened(settings: Settings) -> set[str]:
-    """Phones that already have a finished screening (so re-runs skip them)."""
+FINISHED_OUTCOMES = ("completed", "completed_unscored", "partial", "declined_recording", "not_interested", "wrong_person")
+
+
+def already_screened(settings: Settings, retry_after_hours: float = 0) -> set[str]:
+    """Phones not to call now: finished screenings, plus any call attempt in
+    the last `retry_after_hours` (so no-answers aren't redialled straight away)."""
     done = set()
+    cutoff = datetime.now().timestamp() - retry_after_hours * 3600
     for path in [results_path(settings), *results_path(settings).parent.glob("results-before-*.csv")]:
         if not path.exists():
             continue
         with path.open(newline="", encoding="utf-8-sig") as handle:
             for row in csv.DictReader(handle):
-                if row.get("outcome") in ("completed", "partial", "declined_recording", "not_interested", "wrong_person"):
-                    done.add(row.get("phone", ""))
+                phone = row.get("phone", "")
+                if row.get("outcome") in FINISHED_OUTCOMES:
+                    done.add(phone)
+                    continue
+                try:
+                    called = datetime.strptime(row.get("called_at", ""), "%Y-%m-%d %H:%M").timestamp()
+                except ValueError:
+                    continue
+                if retry_after_hours and called >= cutoff:
+                    done.add(phone)
     return done
 
 
