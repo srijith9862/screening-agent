@@ -12,7 +12,8 @@ import subprocess
 import sys
 
 # Button names Phone Link may use for placing the call.
-CALL_BUTTON_NAMES = r"^(Call|Dial|Make a call|Call now|Start call)$"
+# e.g. "Call Dialled number + 9 1 9 1 2 1 7 6 3 7 9 1" (not the "Calls" tab).
+CALL_BUTTON_NAMES = r"(?i)^(Call|Dial|Make a call|Call now|Start call)( dialled number.*)?$"
 
 _SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
