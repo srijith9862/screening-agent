@@ -50,40 +50,86 @@ exit 1
 
 
 _TRANSFER_SCRIPT = r"""
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
-$root = [System.Windows.Automation.AutomationElement]::RootElement
-$isButton = New-Object System.Windows.Automation.PropertyCondition(
-    [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
-    [System.Windows.Automation.ControlType]::Button)
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class ScreenerMouse {
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+    public static void Click(int x, int y) {
+        SetCursorPos(x, y);
+        mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
+        mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+    }
+}
+'@
+$A = [System.Windows.Automation.AutomationElement]
+$Scope = [System.Windows.Automation.TreeScope]
+$All = [System.Windows.Automation.Condition]::TrueCondition
+$target = '__PATTERN__'
+# Never search these (big trees, or our own console whose title mentions "transfer").
+$skip = '(?i)chrome|edge|firefox|brave|visual studio|vs code|cmd\.exe|command prompt|powershell|terminal|screener|python|file explorer'
+
+function Click-Element($el) {
+    try {
+        $el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+        return 'invoked'
+    } catch {}
+    try {
+        $r = $el.Current.BoundingRectangle
+        if (-not $r.IsEmpty -and $r.Width -gt 0) {
+            [ScreenerMouse]::Click([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height / 2))
+            return 'mouse click'
+        }
+    } catch {}
+    return $null
+}
+
 $windowsSeen = @{}
+$namesSeen = @{}
 $deadline = (Get-Date).AddSeconds(__TIMEOUT__)
 while ((Get-Date) -lt $deadline) {
-    $windows = $root.FindAll([System.Windows.Automation.TreeScope]::Children,
-        [System.Windows.Automation.Condition]::TrueCondition)
+    try { $windows = $A::RootElement.FindAll($Scope::Children, $All) } catch { $windows = @() }
     foreach ($w in $windows) {
-        $title = $w.Current.Name
-        if ($title) { $windowsSeen[$title] = 1 }
-        if ($title -notmatch '(?i)phone link|notification') { continue }
-        foreach ($b in $w.FindAll([System.Windows.Automation.TreeScope]::Descendants, $isButton)) {
-            $name = $b.Current.Name
-            if ($name -match '(?i)transfer' -and $b.Current.IsEnabled) {
-                $invoke = $b.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-                $invoke.Invoke()
-                Write-Output ("CLICKED " + $name)
-                exit 0
+        try {
+            $title = $w.Current.Name
+            $windowsSeen[("'" + $title + "' (" + $w.Current.ClassName + ")")] = 1
+            if ($title -match $skip) { continue }
+            $interesting = $title -match '(?i)phone|link|notification|call'
+            # Elsewhere, only small popup-sized windows (never e.g. an email mentioning a "transfer").
+            $box = $w.Current.BoundingRectangle
+            $small = (-not $box.IsEmpty) -and $box.Width -lt 900 -and $box.Height -lt 700
+            if (-not ($interesting -or $small)) { continue }
+            foreach ($el in $w.FindAll($Scope::Descendants, $All)) {
+                try {
+                    $name = $el.Current.Name
+                    if (-not $name) { continue }
+                    if ($interesting -and $namesSeen.Count -lt 60) { $namesSeen[$name] = 1 }
+                    if ($name -match $target) {
+                        $how = Click-Element $el
+                        if ($how) {
+                            Write-Output ("CLICKED " + $name + " (" + $how + ")")
+                            exit 0
+                        }
+                    }
+                } catch {}
             }
-        }
+        } catch {}
     }
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Milliseconds 400
 }
-Write-Output ("NOT_FOUND windows: " + (($windowsSeen.Keys | Select-Object -First 25) -join ' | '))
+Write-Output ("NOT_FOUND. Windows: " + (($windowsSeen.Keys | Select-Object -First 30) -join ' | '))
+Write-Output ("Items in Phone Link/notification windows: " + (($namesSeen.Keys | Select-Object -First 60) -join ' | '))
 exit 1
 """
 
+TRANSFER_NAMES = r"(?i)transfer|switch (audio |call )?to (this )?(pc|laptop|computer)|move (the )?call|use (this )?(pc|laptop)"
+
 
 def build_transfer_script(timeout_s: int = 20) -> str:
-    return _TRANSFER_SCRIPT.replace("__TIMEOUT__", str(int(timeout_s)))
+    return _TRANSFER_SCRIPT.replace("__TIMEOUT__", str(int(timeout_s))).replace("__PATTERN__", TRANSFER_NAMES)
 
 
 def _run_transfer(timeout_s: int) -> tuple[bool, str]:
