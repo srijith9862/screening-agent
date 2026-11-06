@@ -121,6 +121,11 @@ class SpeechToText:
                 elif kind == "UtteranceEnd" and pending:
                     await self.events.put(SpeechEvent("turn_end", " ".join(pending)))
                     pending = []
+            reason = getattr(self._ws, "close_reason", None) or "closed by Deepgram"
+            log.error("Speech-to-text connection closed: %s", reason)
+            await self.events.put(SpeechEvent("error", str(reason)))
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:  # noqa: BLE001
             log.error("Speech-to-text connection closed: %s", exc)
             await self.events.put(SpeechEvent("error", str(exc)))

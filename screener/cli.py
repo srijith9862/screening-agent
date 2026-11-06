@@ -116,7 +116,8 @@ async def _finish(settings: Settings, candidate: Candidate, result, call_dir: Pa
 
     storage.write_json(call_dir / "call.json", meta)
     storage.append_result(settings, row)
-    print(f"  Outcome: {row.get('outcome')}  ->  {call_dir}")
+    ended = f" (ended by: {result.ended_by}, {result.duration_s:.0f}s)" if result.ended_by else ""
+    print(f"  Outcome: {row.get('outcome')}{ended}  ->  {call_dir}")
     return row
 
 
