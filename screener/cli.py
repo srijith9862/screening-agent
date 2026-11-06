@@ -13,7 +13,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import storage
-from .candidates import Candidate, load_candidates
+from .candidates import Candidate, load_candidates, normalize_phone
 from .config import Settings, TimeWindow, load_env, load_settings, require_env
 
 DEFAULT_CSV = "data/candidates.csv"
@@ -471,6 +471,44 @@ def cmd_score(args: argparse.Namespace, settings: Settings) -> None:
     print(f"Saved scorecard to {call_dir / 'scorecard.md'}")
 
 
+def cmd_split(args: argparse.Namespace, settings: Settings) -> None:
+    """Splits a Naukri shortlist into one CSV per Category, best rating first."""
+    import csv
+    import re
+
+    source = Path(args.file)
+    with source.open(newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        fields = reader.fieldnames or []
+        rows = list(reader)
+    by_category: dict[str, list[dict]] = {}
+    for row in rows:
+        by_category.setdefault((row.get("Category") or "Uncategorised").strip(), []).append(row)
+
+    def rating(row: dict) -> float:
+        try:
+            return float(row.get("Rating_out_of_10") or 0)
+        except ValueError:
+            return 0.0
+
+    names = {"top fit": "top_fit", "okish": "okish", "below for this jd": "below"}
+    out_dir = Path(args.out) if args.out else settings.root / "data"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for category, group in by_category.items():
+        group.sort(key=lambda r: (-rating(r), (r.get("Name") or "").lower()))
+        stem = names.get(category.lower()) or re.sub(r"[^a-z0-9]+", "_", category.lower()).strip("_")
+        path = out_dir / f"{stem}.csv"
+        with path.open("w", newline="", encoding="utf-8-sig") as handle:  # utf-8-sig: Excel shows ₹ correctly
+            writer = csv.DictWriter(handle, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(group)
+        no_phone = sum(1 for r in group if not normalize_phone(r.get("Phone_number") or r.get("Phone") or ""))
+        top = rating(group[0]) if group else 0
+        bottom = rating(group[-1]) if group else 0
+        print(f"  {path}: {len(group)} candidates, rating {top:g} down to {bottom:g}"
+              + (f" ({no_phone} without a usable phone number)" if no_phone else ""))
+
+
 def cmd_purge(args: argparse.Namespace, settings: Settings) -> None:
     days = args.days if args.days is not None else int(settings.get("storage.retention_days", 90))
     removed = storage.purge(settings, days)
@@ -524,6 +562,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("folder")
     p.add_argument("--candidates", default=DEFAULT_CSV)
     p.set_defaults(func=cmd_score)
+    p = sub.add_parser("split", help="split a Naukri shortlist into top_fit / okish / below CSVs, best rating first")
+    p.add_argument("file")
+    p.add_argument("--out", help="output folder (default: data)")
+    p.set_defaults(func=cmd_split)
     p = sub.add_parser("purge", help="delete call folders older than the retention period")
     p.add_argument("--days", type=int)
     p.set_defaults(func=cmd_purge)

@@ -83,11 +83,15 @@ def normalize_phone(raw: str, default_country_code: str = "+91") -> str:
     """Returns +<digits>, or "" when the number doesn't look valid."""
     if not raw:
         return ""
-    raw = raw.strip()
+    # Take the first phone-like number, e.g. "+91 98765 43210 (WhatsApp: ...)" -> "+91 98765 43210".
+    match = re.search(r"\+?\d[\d\s().-]{8,}\d", raw)
+    if not match:
+        return ""
+    raw = match.group(0).strip()
     has_plus = raw.startswith("+")
     digits = re.sub(r"\D", "", raw)
     if has_plus:
-        return "+" + digits if len(digits) >= 10 else ""
+        return "+" + digits if 10 <= len(digits) <= 15 else ""
     if digits.startswith("00"):
         return "+" + digits[2:]
     cc = re.sub(r"\D", "", default_country_code)

@@ -39,6 +39,9 @@ def settings():
         ("0091 9876543210", "+919876543210"),
         ("12345", ""),
         ("", ""),
+        ("+91 9876543210 (WhatsApp: +91 9123456789)", "+919876543210"),
+        ("Not shown on resume", ""),
+        ("Not shown on resume (resume shows only partial 987654321)", ""),
     ],
 )
 def test_normalize_phone(raw, expected):
