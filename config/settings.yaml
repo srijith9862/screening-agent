@@ -16,8 +16,9 @@ claude:
   live_model: claude-haiku-5-5
   live_effort: low
   live_thinking: false
-  # Scorecard after the call (one request per candidate).
-  score_model: claude-sonnet-5-5
+  # Scorecard after the call (one request per candidate). Haiku keeps bulk
+  # calling cheap; use claude-sonnet-5-5 for more careful scorecards.
+  score_model: claude-haiku-5-5
   score_effort: medium
 
 deepgram:

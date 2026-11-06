@@ -120,7 +120,7 @@ async def score_call(
     client: Any = None,
 ) -> dict[str, Any]:
     client = client or anthropic.AsyncAnthropic()
-    model = settings.get("claude.score_model", "claude-sonnet-5-5")
+    model = settings.get("claude.score_model", "claude-haiku-5-5")
     async with client.beta.messages.stream(
         model=model,
         max_tokens=32000,
