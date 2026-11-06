@@ -43,8 +43,14 @@ sections:
           Naukri application said current {current_ctc}, expected {expected_ctc};
           if what they say is different, ask once which is right.
       - id: A5
-        ask: "This role covers both recruitment and employee relations, like check-ins, performance issues and exits. Are you comfortable handling both?"
-        listen_for: A clear yes for both; note if they only want to do recruitment.
+        ask: "This role covers both recruitment, mainly the initial screening of candidates, and employee relations, like check-ins, performance issues and exits. Have you worked on both, and are you comfortable handling both?"
+        listen_for: Hands-on experience with both initial screening and employee relations, and willingness to do both.
+        knockout: Has not worked on, or doesn't want to handle, both recruitment (initial screening) and employee relations.
+        note: >-
+          If they have only done one of the two, or only want to do one, say politely
+          that we are looking for someone who can handle both employee relations and
+          recruitment. Save a note, skip all the remaining questions, ask if they have
+          any questions, then close and end the call.
 
   - id: B
     title: Recruitment
