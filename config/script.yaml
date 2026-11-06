@@ -8,7 +8,7 @@
 company: Datasphere Solutions
 role: HR Executive (Talent Acquisition and Employee Relations)
 location: Malakpet, Hyderabad
-target_minutes: 12
+target_minutes: 8
 
 opening: >
   Greet the candidate by first name and confirm you are speaking with the right
@@ -24,13 +24,11 @@ sections:
     scored: false
     questions:
       - id: A1
-        ask: "Your application says {hr_experience} in HR and {e2e_recruitment_experience} in end-to-end recruitment. Is that still correct?"
-      - id: A2
-        ask: "The role is from our Malakpet office in Hyderabad, {office_schedule}. Does that commute work for you?"
+        ask: "The role is from our Malakpet office in Hyderabad, {office_schedule}, 5 days a week. Does that commute work for you?"
         knockout: Candidate cannot work from the Malakpet office.
+      - id: A2
+        ask: "You mentioned a notice period of {notice_period}. We'd like someone who can join soon. Is there any flexibility, like an early release or buyout?"
       - id: A3
-        ask: "You mentioned a notice period of {notice_period}. Is there any flexibility, like an early release or buyout?"
-      - id: A4
         ask: "You mentioned an expected CTC of {expected_ctc}. Is that firm or flexible?"
         note: Only record the answer. Never negotiate and never reveal the budget.
 
@@ -45,12 +43,6 @@ sections:
       - id: B2
         ask: Roughly how many hires have you closed in the last 12 months, and for what kinds of roles?
         listen_for: A concrete number and role types; experience with recurring roles or building a pipeline.
-      - id: B3
-        ask: How do you keep a candidate engaged between the offer and joining, so they do not drop out?
-        listen_for: Regular touchpoints, early paperwork, introductions to the team, tracking offer dropouts.
-      - id: B4
-        ask: Have you set 30, 60 and 90 day goals for a new hire? Give me one example.
-        listen_for: Concrete, measurable expectations agreed with the manager.
 
   - id: C
     title: Remote employee check-ins
@@ -63,9 +55,6 @@ sections:
         ask: "Here's a scenario. A US team lead says an employee keeps making mistakes, but the employee tells you everything is fine. What do you do in the first week?"
         listen_for: Talks to both sides, asks for concrete examples, documents, escalates to management on time.
         red_flag: Takes one side straight away or ignores it.
-      - id: C3
-        ask: How do you keep notes on employees, and what makes you escalate something to management?
-        listen_for: Short written notes, clear escalation triggers, escalating within a day or two.
 
   - id: D
     title: Employee relations and exits
@@ -77,21 +66,15 @@ sections:
       - id: D2
         ask: "Walk me through an exit you handled: notice, handover, full and final settlement, exit interview. What documentation should exist before a termination?"
         listen_for: Warnings and feedback on record, handover checklist, F and F timelines, exit interview notes.
-      - id: D3
-        ask: An employee tells you something in confidence that their manager probably needs to know. How do you handle it?
-        listen_for: Balances confidentiality with duty to escalate; is honest with the employee about what will be shared.
 
   - id: E
     title: Compliance and payroll
     scored: true
     questions:
       - id: E1
-        ask: Have you handled PF, ESI and professional tax filings yourself, or through a consultant? Which portals have you used?
-        listen_for: Hands-on filing, EPFO and ESIC portals, monthly deadlines.
+        ask: Have you handled PF, ESI and professional tax filings and payroll inputs yourself, or through a consultant?
+        listen_for: Hands-on filing on the EPFO and ESIC portals, monthly deadlines, attendance, leave and loss-of-pay inputs.
       - id: E2
-        ask: What did you own in payroll inputs, for example attendance, leave and loss of pay?
-        listen_for: Monthly attendance and leave reconciliation, LOP calculation, sharing inputs with payroll.
-      - id: E3
         ask: Name one or two labour-law requirements a small private limited company in Telangana has to follow.
         listen_for: Shops and Establishments registration, PF and ESI applicability, gratuity, POSH internal committee for 10 or more employees, the new Labour Codes.
 

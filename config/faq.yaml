@@ -6,10 +6,16 @@
 
 faq:
   - topic: About the company
-    answer: TODO 1-2 lines on what Datasphere Solutions does, the US client, and team size.
+    answer: >-
+      Datasphere Solutions is a Hyderabad-based team that provides offshore
+      regulatory compliance support, mainly for US companies. We've been working
+      with Registrar Corp, helping with their compliance work from India. We
+      recently became a private limited company, and we're now growing the team
+      and looking to take on more clients in the regulatory space. So it's a
+      small, focused team where your work directly affects how clients see us.
 
   - topic: Who the role reports to
-    answer: TODO e.g. the founder / operations head.
+    answer: That will be discussed in the next round of interviews.
 
   - topic: Office location
     answer: The office is in Malakpet, Hyderabad. This is a work-from-office role.
@@ -18,7 +24,7 @@ faq:
     answer: Office hours are 9 am to 5 pm.
 
   - topic: Working days
-    answer: TODO e.g. Monday to Friday, or Monday to Saturday.
+    answer: It's 5 days a week.
 
   - topic: Salary / CTC
     answer: Salary is discussed in the next round with the HR team, based on experience.
@@ -27,13 +33,13 @@ faq:
     answer: This screening call is the first step. After that there are one or two rounds of interviews.
 
   - topic: Probation period
-    answer: TODO e.g. 6 months.
+    answer: The probation period is 3 months.
 
   - topic: Benefits
     answer: The package is the salary, and PF and medical insurance are included.
 
   - topic: Expected joining date
-    answer: TODO e.g. as early as possible, ideally within 30 days.
+    answer: We'd like the person to join immediately if possible.
 
   - topic: When they will hear back
     answer: The HR team will get back within 3 working days.

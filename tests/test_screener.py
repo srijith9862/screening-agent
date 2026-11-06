@@ -89,10 +89,14 @@ def test_fill_leaves_unknown_placeholders():
 
 
 def test_todo_faq_entries_are_hidden(settings):
+    settings.faq.append({"topic": "Cab facility", "answer": "TODO confirm with admin"})
     topics = [item["topic"] for item in settings.usable_faq()]
-    assert "Office location" in topics
-    assert all(not item["answer"].upper().startswith("TODO") for item in settings.usable_faq())
-    assert settings.todo_warnings()  # shipped config still has TODOs to fill
+    assert "Office location" in topics and "Cab facility" not in topics
+    assert settings.todo_warnings() == ["faq.yaml: 'Cab facility' still has a TODO answer"]
+
+
+def test_shipped_config_is_complete():
+    assert load_settings().todo_warnings() == []
 
 
 def test_prompts_render(settings):

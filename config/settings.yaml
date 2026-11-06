@@ -47,8 +47,8 @@ phone:
   bluetooth_device_name: "Srijith9862"
 
 call:
-  max_minutes: 16            # hard stop
-  wrap_up_minute: 13         # agent is told to start wrapping up
+  max_minutes: 13            # hard stop
+  wrap_up_minute: 10         # agent is told to start wrapping up
   silence_timeout_s: 10      # nudge the candidate after this much silence
   max_silences: 2            # end the call after this many nudges in a row
   gap_between_calls_s: 90    # pause between calls (helps avoid spam flagging)
