@@ -92,6 +92,28 @@ def test_prompts_render(settings):
     assert "Good answers show" in scoring_system_prompt(settings)
 
 
+def test_voice_endpoints_and_wav_decoding():
+    import io
+    import wave
+
+    from screener.speech import DG_SPEAK_URL, DG_SPEAK_V2_URL, decode_pcm16, speak_request
+
+    url, params = speak_request("flux-priya-en")
+    assert url == DG_SPEAK_V2_URL and params["model"] == "flux-priya-en" and "container" not in params
+    url, params = speak_request("aura-2-thalia-en")
+    assert url == DG_SPEAK_URL and params["container"] == "none"
+
+    raw = (np.array([0, 16384, -16384], dtype="<i2")).tobytes()
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(24000)
+        wav.writeframes(raw)
+    assert np.allclose(decode_pcm16(buf.getvalue()), [0, 0.5, -0.5])
+    assert np.allclose(decode_pcm16(raw), [0, 0.5, -0.5])
+
+
 def test_calling_hours():
     window = TimeWindow.parse("10:00-19:00")
     assert window.contains(10, 0) and window.contains(18, 59)

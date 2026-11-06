@@ -104,6 +104,12 @@ Your friend should hear a beep, and the level bar should move when they talk. (`
 
 ## 3. Practise first
 
+**Hear the voice** on your laptop speakers. The agent is "Priya", using Deepgram's Indian English voice `flux-priya-en`:
+```bash
+screener voice-test
+```
+To try another voice: `screener voice-test --voice flux-meena-en`. To change it permanently, edit `deepgram.tts_voice` in `config/settings.yaml`, and `agent_name` if you want the agent to introduce itself by a different name.
+
 **Text practice** (only needs the Anthropic key). You type as the candidate:
 ```bash
 screener practice --name "Harshitha"

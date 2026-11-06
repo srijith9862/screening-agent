@@ -194,6 +194,32 @@ def cmd_audio_test(args: argparse.Namespace, settings: Settings) -> None:
         print("\nDone. If the bar moved when the other person spoke and they heard the beep, audio is routed correctly.")
 
 
+def cmd_voice_test(args: argparse.Namespace, settings: Settings) -> None:
+    """Plays the agent's voice on your laptop speakers."""
+    from .audio import _sd
+    from .speech import TTS_RATE, TextToSpeech
+
+    key = require_env("DEEPGRAM_API_KEY")
+    voice = args.voice or settings.get("deepgram.tts_voice", "flux-priya-en")
+    text = args.text or (
+        f"Hi, am I speaking with Harshitha? This is {settings.agent_name}, an AI assistant calling on behalf of "
+        f"{settings.script.get('company', 'the company')} about your application for the HR Executive role."
+    )
+
+    async def synth():
+        tts = TextToSpeech(key, voice)
+        try:
+            return await tts.synthesize(text)
+        finally:
+            await tts.close()
+
+    print(f"Voice: {voice}")
+    audio = asyncio.run(synth())
+    sd = _sd()
+    sd.play(audio, TTS_RATE)
+    sd.wait()
+
+
 def cmd_practice(args: argparse.Namespace, settings: Settings) -> None:
     """Text-only rehearsal: you type as the candidate."""
     from .brain import Brain
@@ -348,6 +374,10 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("devices", help="list audio devices").set_defaults(func=cmd_devices)
     sub.add_parser("check", help="check config, keys, audio and phone").set_defaults(func=cmd_check)
     sub.add_parser("adb-state", help="show the phone's call state (debugging)").set_defaults(func=cmd_adb_state)
+    p = sub.add_parser("voice-test", help="hear the agent's voice on your laptop speakers")
+    p.add_argument("text", nargs="?", help="what to say (default: the opening line)")
+    p.add_argument("--voice", help="try another voice, e.g. flux-meena-en")
+    p.set_defaults(func=cmd_voice_test)
     p = sub.add_parser("audio-test", help="test call audio routing during a manual call")
     p.add_argument("--seconds", type=int, default=15)
     p.set_defaults(func=cmd_audio_test)

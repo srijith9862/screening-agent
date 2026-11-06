@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 import re
+import wave
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlencode
@@ -19,6 +21,7 @@ log = logging.getLogger(__name__)
 
 DG_LISTEN_URL = "wss://api.deepgram.com/v1/listen"
 DG_SPEAK_URL = "https://api.deepgram.com/v1/speak"
+DG_SPEAK_V2_URL = "https://api.deepgram.com/v2/speak"
 TTS_RATE = 24000
 
 
@@ -128,6 +131,26 @@ def split_sentences(text: str) -> list[str]:
     return parts or ([text.strip()] if text.strip() else [])
 
 
+def speak_request(voice: str) -> tuple[str, dict[str, Any]]:
+    """URL and query parameters for a Deepgram voice.
+
+    Flux voices (e.g. flux-priya-en, Indian English) use /v2/speak;
+    Aura voices (e.g. aura-2-thalia-en) use /v1/speak.
+    """
+    params: dict[str, Any] = {"model": voice, "encoding": "linear16", "sample_rate": TTS_RATE}
+    if voice.startswith("flux-"):
+        return DG_SPEAK_V2_URL, params
+    return DG_SPEAK_URL, {**params, "container": "none"}
+
+
+def decode_pcm16(data: bytes) -> np.ndarray:
+    """Raw 16-bit PCM, or a WAV file wrapping it, as float samples."""
+    if data[:4] == b"RIFF":
+        with wave.open(io.BytesIO(data)) as wav:
+            data = wav.readframes(wav.getnframes())
+    return pcm16_to_float(data)
+
+
 class TextToSpeech:
     def __init__(self, api_key: str, voice: str) -> None:
         self._client = httpx.AsyncClient(timeout=20)
@@ -135,14 +158,16 @@ class TextToSpeech:
         self._voice = voice
 
     async def synthesize(self, text: str) -> np.ndarray:
+        url, params = speak_request(self._voice)
         response = await self._client.post(
-            DG_SPEAK_URL,
-            params={"model": self._voice, "encoding": "linear16", "sample_rate": TTS_RATE, "container": "none"},
+            url,
+            params=params,
             headers={"Authorization": f"Token {self._api_key}", "Content-Type": "application/json"},
             json={"text": text},
         )
-        response.raise_for_status()
-        return pcm16_to_float(response.content)
+        if response.status_code >= 400:
+            raise RuntimeError(f"Deepgram voice error {response.status_code}: {response.text[:300]}")
+        return decode_pcm16(response.content)
 
     async def close(self) -> None:
         await self._client.aclose()
