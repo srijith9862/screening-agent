@@ -173,6 +173,15 @@ def test_find_bluetooth_button_in_ui_dump():
     assert parse_ui_nodes("ERROR: could not get idle state.") == []
 
 
+def test_phonelink_script_is_built_safely():
+    from screener.phonelink import build_script
+
+    script = build_script("+919121763791", timeout_s=8)
+    assert "'+919121763791'" in script and "AddSeconds(8)" in script and "__" not in script
+    with pytest.raises(ValueError):
+        build_script("123; Remove-Item C:\\")
+
+
 def test_parse_call_state():
     assert parse_call_state("mCallState=0\n  mCallState=2\n") == 2
     assert parse_call_state("nothing") == 0

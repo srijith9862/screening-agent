@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from . import phonelink
 from .audio import AudioEngine, Recorder
 from .brain import AgentTurn, Brain
 from .candidates import Candidate
@@ -198,9 +199,9 @@ class CallSession:
                 baseline = await self.phone.active_count()
             except PhoneError as exc:
                 log.warning("Telecom answer detection unavailable (%s); using speech", exc)
-        await self.phone.dial(self.candidate.phone)
+        via_phone_link = await self._dial()
         start = time.monotonic()
-        if self.s.get("phone.auto_bluetooth", True):
+        if not via_phone_link and self.s.get("phone.auto_bluetooth", True):
             await self._route_audio_to_laptop()
         heard = ""
         while time.monotonic() - start < timeout:
@@ -219,6 +220,23 @@ class CallSession:
                 if heard:
                     return heard
         return None
+
+    async def _dial(self) -> bool:
+        """Dials the candidate. Returns True if the call was placed through Phone Link."""
+        assert self.phone is not None
+        if self.s.get("phone.dial_via", "phonelink") == "phonelink":
+            clicked, details = await phonelink.dial(self.candidate.phone)
+            if clicked:
+                self._say(f"Dialing through Phone Link ({details.removeprefix('CLICKED ').strip()}).")
+                return True
+            # Phone Link may have placed the call without a button: never dial twice.
+            await asyncio.sleep(2)
+            if await self.phone.call_state() != CALL_STATE_IDLE:
+                self._say("Dialing through Phone Link.")
+                return True
+            self._say(f"! Phone Link didn't place the call ({details[:300]}). Dialing from the phone instead.")
+        await self.phone.dial(self.candidate.phone)
+        return False
 
     async def _call_audio_arriving(self, seconds: float, threshold: float = 0.002) -> bool:
         """True if any call audio (e.g. the ringing tone) reaches the laptop within `seconds`."""

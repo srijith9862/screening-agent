@@ -39,6 +39,9 @@ phone:
   # "speech": wait until the candidate says something (use if telecom detection fails).
   answer_detection: telecom
   ring_timeout_s: 45
+  # "phonelink": dial from the laptop through Phone Link (call audio starts on
+  # the laptop). "adb": dial on the phone (may need a switch to Bluetooth).
+  dial_via: phonelink
   # Calls dialed on the phone can stay on its earpiece. When true, the agent
   # taps the in-call "Bluetooth" button if no call audio reaches the laptop
   # (it never taps when the button already shows Bluetooth as on).
