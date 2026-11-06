@@ -13,7 +13,7 @@ from .audio import AudioEngine, Recorder
 from .brain import AgentTurn, Brain
 from .candidates import Candidate
 from .config import Settings
-from .phone import CALL_STATE_IDLE, Phone, PhoneError
+from .phone import BLUETOOTH_PATTERN, CALL_STATE_IDLE, Phone, PhoneError, find_node
 from .speech import TTS_RATE, SpeechEvent, SpeechToText, TextToSpeech, split_sentences
 
 log = logging.getLogger(__name__)
@@ -229,24 +229,38 @@ class CallSession:
             await asyncio.sleep(0.1)
         return False
 
-    async def _route_audio_to_laptop(self) -> None:
-        """Calls dialed on the phone may stay on its earpiece; switch them to the laptop (Bluetooth)."""
+    async def _route_audio_to_laptop(self, wait_s: float = 10.0) -> None:
+        """Calls dialed on the phone may stay on its earpiece; switch them to the laptop (Bluetooth).
+
+        The in-call screen takes a moment to appear after dialing, so keep
+        looking for its Bluetooth button for up to `wait_s` seconds.
+        """
         assert self.phone is not None
+        device = str(self.s.get("phone.bluetooth_device_name") or "")
+        deadline = time.monotonic() + wait_s
+        labels: list[str] = []
         try:
-            button = await self.phone.bluetooth_button()
-            if button is not None and button.selected:
-                self._say("Call audio: already on Bluetooth.")
-                return
-            if await self._call_audio_arriving(4):
-                self._say("Call audio: reaching the laptop.")
-                return
-            if button is None:
-                self._say("Call audio: no Bluetooth button visible on the phone; assuming audio is on the laptop.")
-                return
-            outcome = await self.phone.tap_bluetooth(str(self.s.get("phone.bluetooth_device_name") or ""))
-            self._say(f"Call audio: {outcome}.")
+            while time.monotonic() < deadline:
+                if self.engine.input_level > 0.002:
+                    self._say("Call audio: reaching the laptop.")
+                    return
+                nodes = await self.phone.screen_nodes()
+                labels = [n.label for n in nodes]
+                button = find_node(nodes, BLUETOOTH_PATTERN)
+                if button is not None:
+                    if button.selected:
+                        self._say("Call audio: already on Bluetooth.")
+                        return
+                    outcome = await self.phone.tap_bluetooth(device)
+                    self._say(f"Call audio: {outcome}.")
+                    return
+                await asyncio.sleep(0.7)
         except PhoneError as exc:
-            self._say(f"! Couldn't check the call audio route ({exc}).")
+            self._say(f"! Couldn't check the call audio route ({exc}). Click 'Transfer' on the laptop if asked.")
+            return
+        seen = ", ".join(dict.fromkeys(labels))[:300] or "nothing (is the phone unlocked?)"
+        self._say("! Couldn't find the Bluetooth button on the call screen. Click 'Transfer' on the laptop popup.")
+        self._say(f"  (phone screen showed: {seen})")
 
     def _drain_events(self) -> None:
         while not self.stt.events.empty():
