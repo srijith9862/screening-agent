@@ -121,7 +121,11 @@ class Brain:
 
     def __post_init__(self) -> None:
         if self.client is None:
-            self.client = anthropic.AsyncAnthropic()
+            # On a live call a stuck request is worse than a quick "say that again":
+            # short timeouts and one retry, instead of the SDK's 10-minute default.
+            self.client = anthropic.AsyncAnthropic(
+                timeout=anthropic.Timeout(12.0, connect=4.0), max_retries=1
+            )
         self._system = [
             # Same for every call -> cached across the whole calling session.
             {"type": "text", "text": live_system_prompt(self.settings), "cache_control": {"type": "ephemeral"}},
@@ -167,11 +171,11 @@ class Brain:
                         if say_so_far:
                             on_say(say_so_far)
                     response = await stream.get_final_message()
-        except anthropic.APIConnectionError:
-            log.exception("Claude connection error")
+        except anthropic.APIConnectionError as exc:  # includes timeouts
+            log.error("Claude connection problem (%s); asking the candidate to repeat", type(exc).__name__)
             return AgentTurn(say=REPEAT_LINE)
         except anthropic.RateLimitError:
-            log.exception("Claude rate limit")
+            log.error("Claude rate limit; asking the candidate to repeat")
             return AgentTurn(say=REPEAT_LINE)
         except anthropic.APIStatusError as exc:
             log.error("Claude API error %s: %s", exc.status_code, exc.message)

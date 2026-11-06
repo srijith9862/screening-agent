@@ -376,6 +376,7 @@ def _fake_session(settings, brain):
     session.recorder = Recorder()
     session.transcript = []
     session._t0 = 0.0
+    session.show_steps = False
     session.brain = brain
     session.stt = SimpleNamespace(events=asyncio.Queue())
 

@@ -57,6 +57,20 @@ def _within_calling_hours(settings: Settings) -> bool:
     return window.contains(now.hour, now.minute)
 
 
+def _quiet_connection_resets() -> None:
+    """Windows prints a long traceback when a server drops a connection; show one line instead."""
+    loop = asyncio.get_running_loop()
+
+    def handler(loop: asyncio.AbstractEventLoop, context: dict) -> None:
+        exc = context.get("exception")
+        if isinstance(exc, (ConnectionResetError, ConnectionAbortedError)):
+            print(f"  ! A network connection was dropped ({exc.__class__.__name__}). If the agent goes quiet, tell Claude.")
+            return
+        loop.default_exception_handler(context)
+
+    loop.set_exception_handler(handler)
+
+
 def _warn_todos(settings: Settings) -> None:
     for warning in settings.todo_warnings():
         print(f"  ! {warning}")
@@ -407,6 +421,7 @@ def cmd_call(args: argparse.Namespace, settings: Settings) -> None:
     print(f"{len(queue)} candidate(s) to call.\n")
 
     async def run() -> None:
+        _quiet_connection_resets()
         for index, candidate in enumerate(queue):
             if not _within_calling_hours(settings):
                 print(f"Outside calling hours ({settings.get('call.calling_hours')} IST). Stopping.")

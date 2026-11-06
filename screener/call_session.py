@@ -129,6 +129,7 @@ class CallSession:
         self.brain = brain or Brain(settings, candidate)
         self.transcript: list[dict[str, Any]] = []
         self._t0 = 0.0
+        self.show_steps = bool(settings.get("call.show_steps", True))
 
     # --- helpers -----------------------------------------------------------
 
@@ -190,6 +191,8 @@ class CallSession:
             turn = await self.brain.respond(reply.message, on_say=on_say)
             reply.turn = turn
             reply.brain_done = True
+            if self.show_steps:
+                self._say(f"   … Claude answered in {time.monotonic() - reply.started_at:.1f}s")
             rest = turn.say[len(emitted):] if turn.say.startswith(emitted) else ("" if emitted else turn.say)
             for sentence in split_sentences(rest):
                 queue_sentence(sentence)
@@ -473,6 +476,9 @@ class CallSession:
                 extra.append("[Time is up. Thank the candidate, say goodbye and end the call now.]")
             message = "\n".join(notes + extra + ([pending_text] if pending_text else []))
             reply = Reply(message=message, consumed_text=pending_text, consumed_notes=notes, started_at=time.monotonic())
+            if self.show_steps:
+                heard = pending_text[-60:] or "(no new words)"
+                self._say(f"   … replying to: {heard}")
             reply.task = asyncio.create_task(self._run_reply(reply))
 
         def cancel_reply() -> None:
