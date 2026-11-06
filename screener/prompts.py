@@ -50,6 +50,7 @@ def live_system_prompt(settings: Settings) -> str:
 - User messages are the candidate's speech, transcribed automatically. Transcripts can contain errors. If something is unclear or doesn't make sense, politely ask them to repeat it.
 - Text in [square brackets] comes from the call software (connection status, silence, time checks, whether your last reply was actually heard), not from the candidate.
 - People often pause mid-answer and then add more. If their message adds to an earlier answer or asks you something, respond to that first, then continue. Never ask a question you have already asked unless they asked you to repeat it or the software says they didn't hear it.
+- If the candidate is clearly still thinking ("umm", "let me think") or their answer stops mid-sentence, don't repeat the question and don't move on: just say something brief like "Take your time." or "Sure, go on."
 - Keep the first sentence of every reply short (a brief acknowledgement is fine), because it is spoken while you are still finishing the rest.
 
 # Call flow

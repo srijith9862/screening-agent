@@ -450,6 +450,42 @@ def test_candidate_adding_to_answer_gets_one_reply(settings):
     ]
 
 
+def test_filler_and_trailing_off_detection():
+    from screener.call_session import is_filler_only, trails_off
+
+    for text in ["Umm.", "Hmm...", "Uh, um.", "Mm.", "Let me think.", "So...", "Hmm, let me think."]:
+        assert is_filler_only(text), text
+    for text in ["Um, I'd say about 50 hires.", "Yes.", "Three years.", "Okay.", "Yeah.", "Mm-hmm.", "Uh-huh."]:
+        assert not is_filler_only(text), text
+    assert trails_off("I posted it on Naukri and")
+    assert trails_off("We did it because um")
+    assert not trails_off("We closed fifty hires last year.")
+
+
+def test_thinking_pause_does_not_trigger_a_reply(settings):
+    """'Umm.' <pause> 'I think about fifty.' -> one reply with the real answer."""
+    from screener.speech import SpeechEvent
+
+    settings.raw.setdefault("call", {})["thinking_wait_s"] = 0.8
+    brain = ScriptedBrain([
+        {"say": "How many hires did you close?"},
+        {"say": "Thanks. Goodbye.", "end_call": True},
+    ], think_s=0.1)
+    session = _fake_session(settings, brain)
+
+    async def scenario():
+        conversation = asyncio.create_task(session._conversation("[Call connected]"))
+        await asyncio.sleep(0.3)
+        await session.stt.events.put(SpeechEvent("turn_end", "Umm."))
+        await asyncio.sleep(0.5)  # thinking...
+        assert len(brain.messages) == 1  # no reply to "Umm."
+        await session.stt.events.put(SpeechEvent("turn_end", "I think about fifty."))
+        return await asyncio.wait_for(conversation, timeout=5)
+
+    asyncio.run(scenario())
+    assert brain.messages[1] == "Umm. I think about fifty."
+
+
 def test_after_premade_greeting_agent_waits_for_candidate(settings):
     from screener.speech import SpeechEvent
 

@@ -58,6 +58,9 @@ phone:
 call:
   max_minutes: 20            # hard stop
   wrap_up_minute: 17         # agent is told to start wrapping up
+  greeting_delay_s: 2        # pause after pickup before "Hello, am I speaking with ...?"
+  thinking_wait_s: 4         # after "umm"/"hmm"/"let me think", wait this long before replying
+  trailing_off_wait_s: 1.5   # extra wait when an answer ends mid-sentence ("...and", "...because")
   silence_timeout_s: 10      # nudge the candidate after this much silence
   max_silences: 2            # end the call after this many nudges in a row
   gap_between_calls_s: 90    # pause between calls (helps avoid spam flagging)

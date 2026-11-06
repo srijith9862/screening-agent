@@ -28,6 +28,23 @@ STILL_TALKING_MIN_WORDS = 2
 CANDIDATE_TALKING_GRACE_S = 2.5
 _SENTENCE_END = re.compile(r"[.!?][\"')]?\s+")
 
+# "Umm", "hmm", "let me think"...: the candidate is thinking, not answering.
+_FILLER = r"(u+m+|u+h+|h+m+|m+|e+r+|a+h+|o+h+|so+|well|let me think|let me see|one sec(ond)?|just a (sec(ond)?|minute|moment))"
+_FILLER_ONLY = re.compile(rf"(?i)^\s*({_FILLER}[\s.,!?…]*)+$")
+_AFFIRMATIVE = re.compile(r"(?i)\b(m+-?h+m+|u+h+-?h+u+h+)\b")  # "mm-hmm", "uh-huh" mean yes
+# Answers that trail off ("...and", "...because um") are probably not finished.
+_TRAILING_OFF = re.compile(
+    rf"(?i)(\b(and|but|so|because|like|then|which|that|or|the|a|to|of|with|for|in|is|was|i|we)|,|\b{_FILLER})[\s.…-]*$"
+)
+
+
+def is_filler_only(text: str) -> bool:
+    return bool(_FILLER_ONLY.match(text)) and not _AFFIRMATIVE.search(text)
+
+
+def trails_off(text: str) -> bool:
+    return bool(_TRAILING_OFF.search(text.strip()))
+
 
 def complete_sentences_end(text: str) -> int:
     """Index just after the last complete sentence in `text` (0 if none yet)."""
@@ -373,6 +390,8 @@ class CallSession:
                 log.warning("Pre-made greeting unavailable: %s", exc)
                 audio = None
             if audio is not None:
+                # A natural beat after pickup before speaking.
+                await asyncio.sleep(float(self.s.get("call.greeting_delay_s", 2)))
                 self.engine.play(audio, TTS_RATE)
                 self._log("agent", greeting)
                 opening = (
@@ -409,7 +428,10 @@ class CallSession:
         wrap_s = float(self.s.get("call.wrap_up_minute", 13)) * 60
         silence_s = float(self.s.get("call.silence_timeout_s", 10))
         max_silences = int(self.s.get("call.max_silences", 2))
+        thinking_wait_s = float(self.s.get("call.thinking_wait_s", 4))
+        trailing_wait_s = float(self.s.get("call.trailing_off_wait_s", 1.5))
 
+        hold_until = 0.0  # don't reply before this (candidate is thinking or mid-answer)
         pending_text = ""  # candidate words the agent hasn't replied to yet
         pending_notes: list[str] = [first_message]  # [bracketed] notes for the next reply
         reply: Reply | None = None
@@ -513,7 +535,8 @@ class CallSession:
 
             # Reply to whatever the candidate said, once both sides have finished talking.
             candidate_talking = time.monotonic() - last_partial_at < CANDIDATE_TALKING_GRACE_S
-            if reply is None and pending_text and self.engine.player.is_idle() and not candidate_talking:
+            holding = time.monotonic() < hold_until
+            if reply is None and pending_text and self.engine.player.is_idle() and not candidate_talking and not holding:
                 start_reply()
 
             # Speech events.
@@ -540,6 +563,14 @@ class CallSession:
                     last_partial_at = 0.0  # they've finished this stretch of speech
                     self._log("candidate", event.text)
                     pending_text = f"{pending_text} {event.text}".strip()
+                    if is_filler_only(event.text) and not ending:
+                        # "Umm..." - they're thinking: wait for the real answer before replying.
+                        hold_until = time.monotonic() + thinking_wait_s
+                        if reply is not None and reply.played == 0:
+                            cancel_reply()
+                        continue
+                    if trails_off(pending_text):
+                        hold_until = time.monotonic() + trailing_wait_s  # "...and" - probably more coming
                     if reply is not None and reply.played == 0 and not ending:
                         cancel_reply()  # not spoken yet: redo it with everything they said
                 continue

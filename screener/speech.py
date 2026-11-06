@@ -47,6 +47,7 @@ class SpeechToText:
             "endpointing": endpointing_ms,
             "utterance_end_ms": utterance_end_ms,
             "vad_events": "true",
+            "filler_words": "true",  # keep "um"/"uh" so the agent knows they're thinking
         }
         self._url = f"{DG_LISTEN_URL}?{urlencode(params)}"
         self._api_key = api_key
