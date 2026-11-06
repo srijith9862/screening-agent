@@ -201,25 +201,51 @@ class CallSession:
                 log.warning("Telecom answer detection unavailable (%s); using speech", exc)
         via_phone_link = await self._dial()
         start = time.monotonic()
-        if not via_phone_link and self.s.get("phone.auto_bluetooth", True):
+        # While it rings, move the call audio to the laptop if it started on the phone.
+        route_task = None if via_phone_link else asyncio.create_task(self._get_audio_to_laptop())
+
+        async def answered(result: str) -> str:
+            if route_task is not None and not route_task.done():
+                try:  # let the transfer finish before the agent speaks
+                    await asyncio.wait_for(asyncio.shield(route_task), timeout=8)
+                except asyncio.TimeoutError:
+                    self._say("! Call audio may still be on the phone. Click 'Transfer' on the laptop if you see it.")
+            return result
+
+        try:
+            heard = ""
+            while time.monotonic() - start < timeout:
+                await asyncio.sleep(0.5)
+                if time.monotonic() - start > 4 and await self.phone.call_state() == CALL_STATE_IDLE:
+                    return None  # rejected, busy, or failed
+                if baseline is not None:
+                    if await self.phone.active_count() > baseline:
+                        self._drain_events()
+                        return await answered("")
+                else:
+                    while not self.stt.events.empty():
+                        event = self.stt.events.get_nowait()
+                        if event.kind in ("final", "turn_end"):
+                            heard = event.text
+                    if heard:
+                        return await answered(heard)
+            return None
+        finally:
+            if route_task is not None and not route_task.done():
+                route_task.cancel()
+
+    async def _get_audio_to_laptop(self) -> None:
+        """The call started on the phone: click Phone Link's Transfer popup, else tap Bluetooth on the phone."""
+        clicked, details = await phonelink.click_transfer(timeout_s=12)
+        if clicked:
+            self._say(f"Call audio: clicked '{details.removeprefix('CLICKED ').strip()}' in Phone Link.")
+            return
+        if await self._call_audio_arriving(1):
+            self._say("Call audio: reaching the laptop.")
+            return
+        log.info("Transfer popup not found: %s", details)
+        if self.s.get("phone.auto_bluetooth", True):
             await self._route_audio_to_laptop()
-        heard = ""
-        while time.monotonic() - start < timeout:
-            await asyncio.sleep(0.5)
-            if time.monotonic() - start > 4 and await self.phone.call_state() == CALL_STATE_IDLE:
-                return None  # rejected, busy, or failed
-            if baseline is not None:
-                if await self.phone.active_count() > baseline:
-                    self._drain_events()
-                    return ""
-            else:
-                while not self.stt.events.empty():
-                    event = self.stt.events.get_nowait()
-                    if event.kind in ("final", "turn_end"):
-                        heard = event.text
-                if heard:
-                    return heard
-        return None
 
     async def _dial(self) -> bool:
         """Dials the candidate. Returns True if the call was placed through Phone Link."""
@@ -232,8 +258,8 @@ class CallSession:
             # Phone Link may have placed the call without a button: never dial twice.
             await asyncio.sleep(2)
             if await self.phone.call_state() != CALL_STATE_IDLE:
-                self._say("Dialing through Phone Link.")
-                return True
+                self._say("Dialing (call already started).")
+                return False  # still check the audio reached the laptop
             self._say(f"! Phone Link didn't place the call ({details[:300]}). Dialing from the phone instead.")
         await self.phone.dial(self.candidate.phone)
         return False

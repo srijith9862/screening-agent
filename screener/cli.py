@@ -173,6 +173,15 @@ def cmd_adb_state(args: argparse.Namespace, settings: Settings) -> None:
     print(Phone(settings.get("phone.adb_path", "adb"), settings.get("phone.device_serial")).debug_state())
 
 
+def cmd_transfer_test(args: argparse.Namespace, settings: Settings) -> None:
+    """During a call started on the phone: clicks Phone Link's 'Transfer to laptop' popup."""
+    from . import phonelink
+
+    print("Looking for Phone Link's Transfer popup for 20 seconds...")
+    clicked, details = asyncio.run(phonelink.click_transfer(timeout_s=20))
+    print(details if details else ("Clicked." if clicked else "Not found."))
+
+
 def cmd_bt_check(args: argparse.Namespace, settings: Settings) -> None:
     """During a call: shows the in-call Bluetooth button the agent would tap (and taps it with --tap)."""
     from .phone import BLUETOOTH_PATTERN, Phone
@@ -480,6 +489,9 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("devices", help="list audio devices").set_defaults(func=cmd_devices)
     sub.add_parser("check", help="check config, keys, audio and phone").set_defaults(func=cmd_check)
     sub.add_parser("adb-state", help="show the phone's call state (debugging)").set_defaults(func=cmd_adb_state)
+    sub.add_parser("transfer-test", help="during a call on the phone: click Phone Link's Transfer popup").set_defaults(
+        func=cmd_transfer_test
+    )
     p = sub.add_parser("bt-check", help="during a call: show (or --tap) the phone's Bluetooth call button")
     p.add_argument("--tap", action="store_true", help="also tap it")
     p.set_defaults(func=cmd_bt_check)

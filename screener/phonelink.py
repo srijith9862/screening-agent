@@ -49,6 +49,67 @@ exit 1
 """
 
 
+_TRANSFER_SCRIPT = r"""
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+$root = [System.Windows.Automation.AutomationElement]::RootElement
+$isButton = New-Object System.Windows.Automation.PropertyCondition(
+    [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+    [System.Windows.Automation.ControlType]::Button)
+$windowsSeen = @{}
+$deadline = (Get-Date).AddSeconds(__TIMEOUT__)
+while ((Get-Date) -lt $deadline) {
+    $windows = $root.FindAll([System.Windows.Automation.TreeScope]::Children,
+        [System.Windows.Automation.Condition]::TrueCondition)
+    foreach ($w in $windows) {
+        $title = $w.Current.Name
+        if ($title) { $windowsSeen[$title] = 1 }
+        if ($title -notmatch '(?i)phone link|notification') { continue }
+        foreach ($b in $w.FindAll([System.Windows.Automation.TreeScope]::Descendants, $isButton)) {
+            $name = $b.Current.Name
+            if ($name -match '(?i)transfer' -and $b.Current.IsEnabled) {
+                $invoke = $b.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+                $invoke.Invoke()
+                Write-Output ("CLICKED " + $name)
+                exit 0
+            }
+        }
+    }
+    Start-Sleep -Milliseconds 500
+}
+Write-Output ("NOT_FOUND windows: " + (($windowsSeen.Keys | Select-Object -First 25) -join ' | '))
+exit 1
+"""
+
+
+def build_transfer_script(timeout_s: int = 20) -> str:
+    return _TRANSFER_SCRIPT.replace("__TIMEOUT__", str(int(timeout_s)))
+
+
+def _run_transfer(timeout_s: int) -> tuple[bool, str]:
+    result = subprocess.run(
+        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", build_transfer_script(timeout_s)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout_s + 20,
+        check=False,
+    )
+    output = (result.stdout or "").strip() or (result.stderr or "").strip()
+    return result.returncode == 0 and output.startswith("CLICKED"), output
+
+
+async def click_transfer(timeout_s: int = 20) -> tuple[bool, str]:
+    """Clicks Phone Link's 'Transfer to laptop' popup when a call is on the phone."""
+    if not available():
+        return False, "Phone Link only works on Windows"
+    try:
+        return await asyncio.to_thread(_run_transfer, timeout_s)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, str(exc)
+
+
 def build_script(number: str, timeout_s: int = 12) -> str:
     if not re.fullmatch(r"\+?\d{10,15}", number):
         raise ValueError(f"Invalid number: {number!r}")
