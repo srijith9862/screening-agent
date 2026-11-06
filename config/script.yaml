@@ -28,9 +28,12 @@ sections:
         listen_for: A clear, positive reason such as growth, a bigger role or the commute. Note anything that suggests they may leave quickly.
       - id: A2
         ask: "The role is from our Malakpet office in Hyderabad, {office_schedule}, 5 days a week. Does that commute work for you?"
-        knockout: Candidate cannot work from the Malakpet office.
+        knockout: Can't work from the Malakpet office, 5 days a week (including wanting remote or hybrid only).
+        if_knockout_say: "We're looking for someone who can work from our Malakpet office five days a week."
       - id: A3
         ask: "You mentioned a notice period of {notice_period}. We'd like someone who can join soon. Is there any flexibility, like an early release or buyout?"
+        knockout: Can't join within about a month (notice longer than 30 days with no early release or buyout).
+        if_knockout_say: "We're looking for someone who can join within about a month."
       - id: A4
         ask: "What's your current CTC, and what are you expecting for this role?"
         note: >-
@@ -42,15 +45,13 @@ sections:
           exact figure; the final number is decided after the interviews. Their
           Naukri application said current {current_ctc}, expected {expected_ctc};
           if what they say is different, ask once which is right.
+        knockout: Expects more than {salary_budget_max} and isn't open to a role within our budget.
+        if_knockout_say: "Our budget for this role goes up to {salary_budget_max}, so it may not be the right fit right now."
       - id: A5
         ask: "This role covers both recruitment, mainly the initial screening of candidates, and employee relations, like check-ins, performance issues and exits. Have you worked on both, and are you comfortable handling both?"
         listen_for: Hands-on experience with both initial screening and employee relations, and willingness to do both.
         knockout: Has not worked on, or doesn't want to handle, both recruitment (initial screening) and employee relations.
-        note: >-
-          If they have only done one of the two, or only want to do one, say politely
-          that we are looking for someone who can handle both employee relations and
-          recruitment. Save a note, skip all the remaining questions, ask if they have
-          any questions, then close and end the call.
+        if_knockout_say: "We're looking for someone who can handle both employee relations and recruitment."
 
   - id: B
     title: Recruitment

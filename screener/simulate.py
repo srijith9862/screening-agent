@@ -87,8 +87,8 @@ PERSONAS: list[Persona] = [
         "Agree to the recording. When the office location comes up, say Malakpet is too far from where you live and you "
         "can only do work from home. Your notice period is 3 months and not negotiable. Expected CTC 6 lakhs, firm. "
         "Otherwise answer reasonably.",
-        "Says 6 lakhs is above the budget; notes the knockouts without arguing or ending early; finishes the call; "
-        "recommends reject or hold.",
+        "Politely says we need someone who can work from the Malakpet office, skips the remaining questions, "
+        "closes the call early without arguing; recommends reject.",
     ),
 ]
 
@@ -200,8 +200,10 @@ def checks(result: SimResult) -> list[str]:
     if "record" not in opening:
         issues.append("did not mention recording in the opening")
     key = result.persona.key
-    if key in ("curious", "knockout") and result.consent == "yes" and not OVER_BUDGET_PATTERN.search(agent_text):
+    if key == "curious" and result.consent == "yes" and not OVER_BUDGET_PATTERN.search(agent_text):
         issues.append("did not tell the candidate their expected CTC is above the budget")
+    if key == "knockout" and len(result.transcript) > 16:
+        issues.append(f"didn't end early after the knockout ({len(result.transcript)} turns)")
     if key == "declines" and result.consent != "no":
         issues.append(f"consent should be 'no', got '{result.consent}'")
     if key == "callback" and not result.callback:

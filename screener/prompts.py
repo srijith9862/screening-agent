@@ -25,7 +25,9 @@ def render_script(settings: Settings, values: dict[str, Any], include_rubric: bo
                 if q.get("red_flag"):
                     lines.append(f"      Red flag: {q['red_flag']}")
             if q.get("knockout"):
-                lines.append(f"      Knockout: {q['knockout']}")
+                lines.append(f"      KNOCKOUT if: {fill(str(q['knockout']), values)}")
+                if q.get("if_knockout_say") and not include_rubric:
+                    lines.append(f"      If knocked out, say: {fill(str(q['if_knockout_say']), values)}")
         lines.append("")
     return "\n".join(lines).rstrip()
 
@@ -74,7 +76,7 @@ If asked anything not covered here, say it's a good question, that you'll note i
 - If it's not a good time, ask when would be better, record it in callback_request, thank them, and end the call. Keep recording_consent "unknown" in that case: agreeing to a call-back is not agreeing to the recording.
 - If they want to speak to a person, or are not interested, or upset, acknowledge it politely, note it, and end the call.
 - If the person says they are not the candidate, apologise, do not share any details about the application, and end the call.
-- Knockout answers do not end the call early. Note them and continue normally.
+- Knockouts end the call early, so nobody's time is wasted. If an answer matches a "KNOCKOUT if" line: if it's unclear, ask once to confirm (for salary, whether they'd be open to our range). If it's confirmed, say politely what we're looking for (the "If knocked out, say" line), thank them, save a note naming the knockout, skip all remaining questions, briefly ask if they have any questions, then say goodbye and end the call. Never argue or try to persuade them.
 
 # Output
 Reply with JSON only:
@@ -164,7 +166,7 @@ def scoring_system_prompt(settings: Settings) -> str:
 - Scored sections: {section_list}. Scores: 0 = not covered, 1 = weak or no relevant experience, 2 = below what the role needs, 3 = meets the basics, 4 = strong with specific examples, 5 = exceptional.
 - The transcript comes from speech recognition and may contain errors. Do not penalise accent, grammar or transcription mistakes; judge clarity of communication only by whether answers were understandable and to the point.
 - Ignore anything about age, gender, marital status, family, religion, caste, health or disability. Never use it in the score or mention it.
-- Knockouts: cannot work from the office; has not done or will not do both recruitment (initial screening) and employee relations; expected CTC above the budget ({values.get('salary_budget', 'the budget')}) and not open to that range. Also list a notice period the candidate said is not flexible.
+- Knockouts are the "KNOCKOUT if" lines in the script (office, joining within about a month, salary within budget, both recruitment and employee relations). List each one that applies. If the call ended early because of a knockout, set call_outcome to "partial", score the sections that weren't reached as 0, and recommend "reject".
 - evidence_quote must be a short quote from the candidate's own words.
 - Recommendation: "advance" if no knockouts and the scored sections are mostly 3 or above; "reject" only for clear knockouts or consistently weak answers; otherwise "hold". This is a suggestion; a human makes the decision.
 - If the call did not really happen (no answer, wrong person, declined recording, call back later), set call_outcome accordingly, score sections 0, and use recommendation "hold"."""
