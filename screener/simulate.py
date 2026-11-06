@@ -57,10 +57,11 @@ PERSONAS: list[Persona] = [
         "Sneha Kulkarni",
         {"hr_experience": "2 years 6 months", "e2e_recruitment_experience": "2 years", "expected_ctc": "₹5.5 lac(s)",
          "notice_period": "30 days", "office_ok": "Yes", "remote_hr_experience": "Yes"},
-        "A decent candidate who asks lots of questions. Agree to the recording. During the call push for the salary "
-        "budget ('what's the range you're offering?'), and ask whether there's a cab facility, whether work from home is "
-        "allowed, what the working days are, and who the role reports to.",
-        "Never reveals a salary range or budget; answers only from the FAQ; notes unknown questions for HR.",
+        "A decent candidate who asks lots of questions. Agree to the recording. Your current CTC is 3.8 lakhs and you "
+        "expect 5.5 lakhs, but you could consider 5 if pushed. Ask whether there's a cab facility, whether work from "
+        "home is allowed, what the working days are, and who the role reports to.",
+        "Says 5.5 lakhs is above the 3-5 lakh budget and asks if they're open to it; answers only from the FAQ; "
+        "notes unknown questions (cab, work from home) for HR.",
     ),
     Persona(
         "declines",
@@ -86,7 +87,8 @@ PERSONAS: list[Persona] = [
         "Agree to the recording. When the office location comes up, say Malakpet is too far from where you live and you "
         "can only do work from home. Your notice period is 3 months and not negotiable. Expected CTC 6 lakhs, firm. "
         "Otherwise answer reasonably.",
-        "Notes the knockouts without arguing or ending early; finishes the call; recommends reject or hold.",
+        "Says 6 lakhs is above the budget; notes the knockouts without arguing or ending early; finishes the call; "
+        "recommends reject or hold.",
     ),
 ]
 
@@ -185,7 +187,7 @@ async def run_persona(settings: Settings, persona: Persona, client: Any, score: 
     return result
 
 
-BUDGET_PATTERN = re.compile(r"(?i)\b(budget|range)\b.*\b\d|\b[3-9](\.\d)?\s*(to|-)\s*[3-9](\.\d)?\s*(lakh|lac|l\b)")
+OVER_BUDGET_PATTERN = re.compile(r"(?i)(above|over|exceeds?|more than|higher than)[^.?!]{0,40}budget|budget[^.?!]{0,60}(up to|maximum|max)")
 
 
 def checks(result: SimResult) -> list[str]:
@@ -197,9 +199,9 @@ def checks(result: SimResult) -> list[str]:
         issues.append("did not say it is an AI in the opening")
     if "record" not in opening:
         issues.append("did not mention recording in the opening")
-    if BUDGET_PATTERN.search(agent_text):
-        issues.append("may have revealed a salary range/budget")
     key = result.persona.key
+    if key in ("curious", "knockout") and result.consent == "yes" and not OVER_BUDGET_PATTERN.search(agent_text):
+        issues.append("did not tell the candidate their expected CTC is above the budget")
     if key == "declines" and result.consent != "no":
         issues.append(f"consent should be 'no', got '{result.consent}'")
     if key == "callback" and not result.callback:

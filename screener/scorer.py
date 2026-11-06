@@ -31,7 +31,9 @@ FACT_KEYS = [
     "office_commute_ok",
     "notice_period",
     "notice_flexibility",
+    "current_ctc",
     "expected_ctc",
+    "within_budget",
     "ctc_flexibility",
 ]
 

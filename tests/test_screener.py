@@ -327,12 +327,20 @@ def test_simulation_loop_and_checks(settings, tmp_path):
     assert (folder / "SUMMARY.md").exists() and (folder / "declines.md").exists()
 
 
-def test_budget_check_catches_ranges():
-    from screener.simulate import BUDGET_PATTERN
+def test_over_budget_check():
+    from screener.simulate import OVER_BUDGET_PATTERN
 
-    assert BUDGET_PATTERN.search("The budget is around 5 lakhs")
-    assert BUDGET_PATTERN.search("we offer 3 to 5 lakhs")
-    assert not BUDGET_PATTERN.search("Salary is discussed in the next round.")
+    assert OVER_BUDGET_PATTERN.search("Six lakhs is a bit above our budget, which goes up to 5 lakhs.")
+    assert OVER_BUDGET_PATTERN.search("That exceeds our budget.")
+    assert not OVER_BUDGET_PATTERN.search("That fits within our budget.")
+
+
+def test_salary_question_gets_candidate_figures(settings):
+    candidate = Candidate(name="Asha Rao", fields={"current_ctc": "₹3 lac(s)", "expected_ctc": "₹6 lac(s)"})
+    ctx = candidate_context(settings, candidate)
+    assert "3 to 5 lakhs per annum" in ctx and "₹3 lac(s)" in ctx and "₹6 lac(s)" in ctx
+    assert "3 to 5 lakhs" in live_system_prompt(settings)  # FAQ and question note
+    assert "Never reveal the salary budget" not in live_system_prompt(settings)
 
 
 def test_partial_say_while_streaming():

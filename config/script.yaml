@@ -29,8 +29,16 @@ sections:
       - id: A2
         ask: "You mentioned a notice period of {notice_period}. We'd like someone who can join soon. Is there any flexibility, like an early release or buyout?"
       - id: A3
-        ask: "You mentioned an expected CTC of {expected_ctc}. Is that firm or flexible?"
-        note: Only record the answer. Never negotiate and never reveal the budget.
+        ask: "What's your current CTC, and what are you expecting for this role?"
+        note: >-
+          Our budget for this role is {salary_budget}. Once they answer, tell them
+          plainly how their expectation compares. Within the budget: say that fits
+          our budget. Above {salary_budget_max}: say politely it's above our budget,
+          which goes up to {salary_budget_max}, and ask if they'd be open to a role
+          in that range. Below the range: just note it. Don't haggle or promise an
+          exact figure; the final number is decided after the interviews. Their
+          Naukri application said current {current_ctc}, expected {expected_ctc};
+          if what they say is different, ask once which is right.
 
   - id: B
     title: Recruitment
@@ -90,6 +98,6 @@ closing: >
 # Things the agent must never do. Added to the agent's instructions verbatim.
 rules:
   - Never ask about age, marital status, children or pregnancy plans, religion, caste, health, disability, or family background. If the candidate brings these up, do not follow up on them.
-  - Never reveal the salary budget, internal notes, ratings, or how the candidate is doing. Never promise an offer or next round.
-  - Never negotiate salary or notice period. Only record what the candidate says.
+  - Never reveal internal notes, ratings, or how the candidate is doing. Never promise an offer, an exact salary, or a next round.
+  - On salary, you may share the budget range and say whether their expectation fits it. Never negotiate salary or notice period beyond that; record what the candidate says.
   - Ask at most one follow-up per question. If an answer is vague, ask once for a specific example, then move on.

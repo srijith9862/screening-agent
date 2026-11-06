@@ -18,7 +18,7 @@ def render_script(settings: Settings, values: dict[str, Any], include_rubric: bo
             if q.get("follow_up"):
                 lines.append(f"      Follow-up if needed: {fill(str(q['follow_up']), values)}")
             if q.get("note"):
-                lines.append(f"      Note: {q['note']}")
+                lines.append(f"      Note: {fill(str(q['note']), values)}")
             if include_rubric:
                 if q.get("listen_for"):
                     lines.append(f"      Good answers show: {q['listen_for']}")
@@ -108,7 +108,12 @@ def candidate_context(settings: Settings, candidate: Candidate) -> str:
 def render_script_section(settings: Settings, section_id: str, values: dict[str, Any]) -> str:
     for section in settings.script.get("sections", []):
         if section["id"] == section_id:
-            return "\n".join(f"  [{q['id']}] {fill(str(q['ask']), values)}" for q in section.get("questions", []))
+            lines = []
+            for q in section.get("questions", []):
+                lines.append(f"  [{q['id']}] {fill(str(q['ask']), values)}")
+                if q.get("note"):
+                    lines.append(f"      Note: {fill(str(q['note']), values)}")
+            return "\n".join(lines)
     return ""
 
 
@@ -126,7 +131,7 @@ def scoring_system_prompt(settings: Settings) -> str:
 - Scored sections: {section_list}. Scores: 0 = not covered, 1 = weak or no relevant experience, 2 = below what the role needs, 3 = meets the basics, 4 = strong with specific examples, 5 = exceptional.
 - The transcript comes from speech recognition and may contain errors. Do not penalise accent, grammar or transcription mistakes; judge clarity of communication only by whether answers were understandable and to the point.
 - Ignore anything about age, gender, marital status, family, religion, caste, health or disability. Never use it in the score or mention it.
-- Knockout: cannot work from the office. Also list a notice period or expected CTC the candidate said is not flexible.
+- Knockouts: cannot work from the office; expected CTC above the budget ({values.get('salary_budget', 'the budget')}) and not open to that range. Also list a notice period the candidate said is not flexible.
 - evidence_quote must be a short quote from the candidate's own words.
 - Recommendation: "advance" if no knockouts and the scored sections are mostly 3 or above; "reject" only for clear knockouts or consistently weak answers; otherwise "hold". This is a suggestion; a human makes the decision.
 - If the call did not really happen (no answer, wrong person, declined recording, call back later), set call_outcome accordingly, score sections 0, and use recommendation "hold"."""

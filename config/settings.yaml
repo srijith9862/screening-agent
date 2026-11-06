@@ -5,6 +5,8 @@ agent_name: Priya
 # Values used to fill {placeholders} in script.yaml.
 script_values:
   office_schedule: 9 am to 5 pm
+  salary_budget: 3 to 5 lakhs per annum
+  salary_budget_max: 5 lakhs per annum
   reply_timeline: within 3 working days
 
 claude:
