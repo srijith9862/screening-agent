@@ -2,6 +2,22 @@
 
 agent_name: Priya
 
+# Conversation engine for calls and rehearsals:
+#   voice_agent: Deepgram Voice Agent API - listening, Claude and Priya's voice in
+#                one connection, with Deepgram's own turn-taking. Needs only the
+#                Deepgram key during the call. (Default.)
+#   classic:     separate Deepgram speech-to-text, Claude API and Deepgram voice.
+engine: voice_agent
+
+voice_agent:
+  think_model: claude-haiku-4-5   # run by Deepgram; claude-sonnet-5 is their higher-priced tier
+  listen_model: flux-general-en
+  # End-of-turn detection: higher = waits longer before replying (fewer
+  # interruptions while candidates think), lower = replies faster.
+  eot_threshold: 0.8
+  eot_timeout_ms: 4000      # reply after this much silence even if unsure they've finished
+  # eager_eot_threshold: 0.5  # uncomment to start preparing replies earlier (lower latency, more LLM use)
+
 # Values used to fill {placeholders} in script.yaml.
 script_values:
   office_schedule: 9 am to 5 pm

@@ -57,6 +57,17 @@ def _within_calling_hours(settings: Settings) -> bool:
     return window.contains(now.hour, now.minute)
 
 
+def _session_class(settings: Settings):
+    """The conversation engine chosen in settings.yaml (engine: voice_agent | classic)."""
+    if settings.get("engine", "voice_agent") == "classic":
+        from .call_session import CallSession
+
+        return CallSession
+    from .voice_agent import AgentCallSession
+
+    return AgentCallSession
+
+
 def _quiet_connection_resets() -> None:
     """Windows prints a long traceback when a server drops a connection; show one line instead."""
     loop = asyncio.get_running_loop()
@@ -379,7 +390,7 @@ def cmd_practice(args: argparse.Namespace, settings: Settings) -> None:
 
 def cmd_rehearse(args: argparse.Namespace, settings: Settings) -> None:
     """Voice rehearsal on your laptop mic and speakers (use headphones), no phone."""
-    from .call_session import CallSession
+    session_class = _session_class(settings)
 
     require_env("ANTHROPIC_API_KEY")
     key = require_env("DEEPGRAM_API_KEY")
@@ -387,7 +398,7 @@ def cmd_rehearse(args: argparse.Namespace, settings: Settings) -> None:
     print("Use headphones, otherwise the agent hears itself through your microphone.")
 
     async def run() -> None:
-        session = CallSession(settings, candidate, None, key, args.mic, args.speaker)
+        session = session_class(settings, candidate, None, key, args.mic, args.speaker)
         result = await session.run()
         await _finish(settings, candidate, result, storage.new_call_dir(settings, candidate), score=not args.no_score)
 
@@ -395,7 +406,7 @@ def cmd_rehearse(args: argparse.Namespace, settings: Settings) -> None:
 
 
 def cmd_call(args: argparse.Namespace, settings: Settings) -> None:
-    from .call_session import CallSession
+    session_class = _session_class(settings)
     from .phone import Phone
 
     require_env("ANTHROPIC_API_KEY")
@@ -420,6 +431,9 @@ def cmd_call(args: argparse.Namespace, settings: Settings) -> None:
         print(f"Skipping (no valid phone number): {', '.join(skipped_no_phone)}")
     print(f"{len(queue)} candidate(s) to call.\n")
 
+    engine = "Deepgram Voice Agent" if settings.get("engine", "voice_agent") != "classic" else "classic"
+    print(f"Engine: {engine}\n")
+
     async def run() -> None:
         _quiet_connection_resets()
         for index, candidate in enumerate(queue):
@@ -435,7 +449,7 @@ def cmd_call(args: argparse.Namespace, settings: Settings) -> None:
                 if answer == "s":
                     continue
             call_dir = storage.new_call_dir(settings, candidate)
-            session = CallSession(
+            session = session_class(
                 settings, candidate, phone, key,
                 settings.get("audio.call_in_device"), settings.get("audio.call_out_device"),
             )

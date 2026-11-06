@@ -125,7 +125,9 @@ class CallSession:
             settings.get("deepgram.tts_voice", "flux-priya-en"),
             int(settings.get("deepgram.tts_expressivity", 0)),
         )
-        self.engine = AudioEngine(in_device, out_device, self.stt.feed, self.recorder)
+        # Where the candidate's audio goes (speech-to-text here; the Voice Agent in AgentCallSession).
+        self._audio_sink = self.stt.feed
+        self.engine = AudioEngine(in_device, out_device, lambda pcm: self._audio_sink(pcm), self.recorder)
         self.brain = brain or Brain(settings, candidate)
         self.transcript: list[dict[str, Any]] = []
         self._t0 = 0.0

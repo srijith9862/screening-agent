@@ -65,11 +65,16 @@ class SpeechToText:
     async def start(self) -> None:
         from websockets.asyncio.client import connect
 
+        # Start clean (this may be a restart after stop()).
+        self.events = asyncio.Queue()
+        self._audio = asyncio.Queue()
+        self._stopping = False
         self._loop = asyncio.get_running_loop()
         self._ws = await connect(self._url, additional_headers={"Authorization": f"Token {self._api_key}"})
         self._tasks = [asyncio.create_task(self._sender()), asyncio.create_task(self._receiver())]
 
     async def stop(self) -> None:
+        self._stopping = True
         await self._audio.put(None)
         try:
             if self._ws is not None:
@@ -122,12 +127,16 @@ class SpeechToText:
                 elif kind == "UtteranceEnd" and pending:
                     await self.events.put(SpeechEvent("turn_end", " ".join(pending)))
                     pending = []
+            if getattr(self, "_stopping", False):
+                return  # we closed it on purpose
             reason = getattr(self._ws, "close_reason", None) or "closed by Deepgram"
             log.error("Speech-to-text connection closed: %s", reason)
             await self.events.put(SpeechEvent("error", str(reason)))
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001
+            if getattr(self, "_stopping", False):
+                return
             log.error("Speech-to-text connection closed: %s", exc)
             await self.events.put(SpeechEvent("error", str(exc)))
 

@@ -622,3 +622,125 @@ def test_format_transcript():
         [{"t": 0, "speaker": "candidate", "text": "Hello?"}, {"t": 65, "speaker": "agent", "text": "Hi"}], "Maya"
     )
     assert text == "[00:00] Candidate: Hello?\n[01:05] Maya: Hi"
+
+
+# --- Deepgram Voice Agent engine (against a local fake server) -------------------
+
+
+def _fake_agent_session(settings, url):
+    from screener import voice_agent
+    from screener.voice_agent import AgentCallSession
+
+    voice_agent.AGENT_URL = url
+    session = object.__new__(AgentCallSession)
+    session.s = settings
+    session.candidate = Candidate(name="Ruthwik Reddy")
+    session.phone = None
+    session.echo = False
+    session.recorder = Recorder()
+    session.transcript = []
+    session._t0 = 0.0
+    session.show_steps = False
+    session._key = "test-key"
+    session._loop = None
+    session._outgoing = asyncio.Queue()
+    session.consent = "unknown"
+    session.notes = []
+    session.callback_request = ""
+    session.end_reason = ""
+    played = []
+
+    async def wait_until_played():
+        return None
+
+    session.engine = SimpleNamespace(
+        player=SimpleNamespace(is_idle=lambda: True, clear=lambda: None),
+        play=lambda audio, rate: played.append(len(audio)),
+        wait_until_played=wait_until_played,
+        input_level=0.0,
+        start=lambda: None,
+        stop=lambda: None,
+    )
+
+    class FakeTTS:
+        async def close(self):
+            return None
+
+    session.tts = FakeTTS()
+    session._played = played
+    return session
+
+
+def test_voice_agent_engine_happy_path(settings):
+    from websockets.asyncio.server import serve
+
+    received = {}
+    settings.raw.setdefault("call", {})["greeting_delay_s"] = 0
+
+    async def fake_deepgram(ws):
+        await ws.send(json.dumps({"type": "Welcome"}))
+        received["settings"] = json.loads(await ws.recv())
+        received["auth"] = ws.request.headers.get("Authorization")
+        await ws.send(json.dumps({"type": "SettingsApplied"}))
+        await ws.send(json.dumps({"type": "ConversationText", "role": "assistant", "content": "Hello, am I speaking with Ruthwik?"}))
+        await ws.send(b"\x00\x00" * 2400)  # 0.1 s of agent audio
+        await ws.send(json.dumps({"type": "ConversationText", "role": "user", "content": "Yes, and the recording is fine."}))
+        await ws.send(json.dumps({"type": "FunctionCallRequest", "functions": [
+            {"id": "f1", "name": "record_consent", "arguments": "{\"consent\": \"yes\"}", "client_side": True},
+            {"id": "f2", "name": "save_note", "arguments": "{\"question_id\": \"A4\", \"note\": \"Expects 6 lakhs\"}", "client_side": True},
+        ]}))
+        received["responses"] = [json.loads(await ws.recv()), json.loads(await ws.recv())]
+        await ws.send(json.dumps({"type": "ConversationText", "role": "assistant", "content": "Thanks, goodbye!"}))
+        await ws.send(json.dumps({"type": "FunctionCallRequest", "functions": [
+            {"id": "f3", "name": "end_call", "arguments": "{\"reason\": \"completed\"}", "client_side": True},
+        ]}))
+        received["end"] = json.loads(await ws.recv())
+        try:
+            async for _ in ws:  # audio from the call, until the client hangs up
+                pass
+        except Exception:
+            pass
+
+    async def scenario():
+        async with serve(fake_deepgram, "127.0.0.1", 0) as server:
+            port = server.sockets[0].getsockname()[1]
+            session = _fake_agent_session(settings, f"ws://127.0.0.1:{port}")
+            session._loop = asyncio.get_running_loop()
+            session._t0 = time.monotonic()
+            ended = await asyncio.wait_for(session._agent_conversation("Hello, am I speaking with Ruthwik?", 0), 10)
+            return session, ended
+
+    import time
+
+    session, ended = asyncio.run(scenario())
+    assert ended == "agent_ended"
+    assert received["auth"] == "Token test-key"
+    s = received["settings"]
+    assert s["type"] == "Settings" and s["agent"]["greeting"] == "Hello, am I speaking with Ruthwik?"
+    assert s["agent"]["think"]["provider"] == {"type": "anthropic", "model": "claude-haiku-4-5"}
+    assert s["agent"]["speak"]["provider"]["model"] == "flux-priya-en"
+    assert "Ruthwik" in s["agent"]["think"]["prompt"] and "record_consent" in s["agent"]["think"]["prompt"]
+    assert [r["id"] for r in received["responses"]] == ["f1", "f2"] and received["end"]["id"] == "f3"
+    assert session.consent == "yes" and session.notes == ["[A4] Expects 6 lakhs"] and session.end_reason == "completed"
+    assert [t["speaker"] for t in session.transcript] == ["agent", "candidate", "agent"]
+    assert session._played  # agent audio went to the call
+
+
+def test_voice_agent_rejected_settings_raise_setup_error(settings):
+    from websockets.asyncio.server import serve
+
+    from screener.voice_agent import AgentSetupError
+
+    async def rejecting(ws):
+        await ws.recv()
+        await ws.send(json.dumps({"type": "Error", "description": "INVALID_SETTINGS: bad model"}))
+
+    async def scenario():
+        async with serve(rejecting, "127.0.0.1", 0) as server:
+            port = server.sockets[0].getsockname()[1]
+            session = _fake_agent_session(settings, f"ws://127.0.0.1:{port}")
+            session._loop = asyncio.get_running_loop()
+            with pytest.raises(AgentSetupError, match="INVALID_SETTINGS"):
+                await session._agent_conversation("Hello?", 0)
+
+    asyncio.run(scenario())

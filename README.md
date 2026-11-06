@@ -135,6 +135,15 @@ Both write a scorecard to `output/` so you can check the scoring too.
 
 ---
 
+## Conversation engine
+
+`engine` in `config/settings.yaml` picks how the live conversation runs:
+
+- **`voice_agent`** (default): Deepgram's Voice Agent API. Listening (Flux, with built-in end-of-turn detection), Claude (`voice_agent.think_model`, run by Deepgram) and Priya's voice all go through one connection. Billed to your Deepgram account per minute. If Deepgram rejects the setup at the start of a call, that call continues on the classic engine automatically.
+- **`classic`**: separate Deepgram speech-to-text, Claude API (`claude.live_model`) and Deepgram voice, with this program doing the turn-taking.
+
+Either way the scorecard uses your Anthropic key (`claude.score_model`). To tune when Priya replies on the voice agent, change `voice_agent.eot_threshold` (higher waits longer for the candidate to finish).
+
 ## 4. Make calls
 
 ```bash

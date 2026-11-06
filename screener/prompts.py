@@ -86,6 +86,38 @@ Reply with JSON only:
 - note: a private note for the HR team (not spoken), at most 15 words, only when there is something worth recording; otherwise "". The full transcript is kept, so don't summarise the answer."""
 
 
+VOICE_AGENT_FUNCTIONS = """# Tools (the candidate never hears these)
+- record_consent: call it as soon as the candidate clearly agrees to the recording ("yes") or refuses it ("no").
+- save_note: a private note for the HR team, at most 15 words, only when something is worth recording (a knockout, a contradiction with their application, a question you couldn't answer). Don't summarise every answer; the transcript is kept.
+- schedule_callback: when they ask to be called back, with the time they gave.
+- end_call: only after you have said goodbye (or the call cannot continue)."""
+
+
+def voice_agent_prompt(settings: Settings, candidate: Candidate, greeting: str, extra_note: str = "") -> str:
+    """System prompt for Deepgram's Voice Agent: same script and rules, tools instead of JSON."""
+    base = live_system_prompt(settings).split("# Output")[0].rstrip()
+    replacements = {
+        'Everything you put in "say" is spoken aloud by text-to-speech': "Everything you write is spoken aloud by text-to-speech",
+        'Set recording_consent to "no".': 'Call record_consent with "no".',
+        "record it in callback_request": "call schedule_callback with the time",
+        'Keep recording_consent "unknown" in that case: agreeing to a call-back is not agreeing to the recording.':
+            "Don't call record_consent in that case: agreeing to a call-back is not agreeing to the recording.",
+        "Text in [square brackets] comes from the call software": "Text in [square brackets] in these instructions comes from the call software",
+    }
+    for old, new in replacements.items():
+        base = base.replace(old, new)
+    parts = [
+        base,
+        VOICE_AGENT_FUNCTIONS,
+        "# This call\n" + candidate_context(settings, candidate),
+        f'The call software has already greeted them with: "{greeting}". Don\'t greet again; '
+        "once they reply, continue with the rest of the opening.",
+    ]
+    if extra_note:
+        parts.append(extra_note)
+    return "\n\n".join(parts)
+
+
 def candidate_context(settings: Settings, candidate: Candidate) -> str:
     """Per-call details sent as a mid-conversation system message."""
     facts = "\n".join(f"- {k}: {v}" for k, v in candidate.application_facts().items()) or "- (none)"
