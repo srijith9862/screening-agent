@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -132,6 +133,17 @@ def test_calling_hours():
 
 
 # --- phone ---------------------------------------------------------------------
+
+
+@pytest.mark.skipif(os.name == "nt", reason="uses a shell-script stand-in for adb")
+def test_adb_output_with_non_ascii_bytes(tmp_path):
+    from screener.phone import Phone
+
+    fake = tmp_path / "adb"
+    fake.write_text("#!/bin/sh\nprintf 'state: ACTIVE \\342\\200\\235 caf\\351\\n'\n")
+    fake.chmod(0o755)
+    out = Phone(str(fake))._run("shell", "dumpsys", "telecom")
+    assert out.startswith("state: ACTIVE") and count_telecom_active(out) == 1
 
 
 def test_parse_call_state():

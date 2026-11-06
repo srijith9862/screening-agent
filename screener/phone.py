@@ -46,8 +46,15 @@ class Phone:
 
     def _run(self, *args: str, timeout: float = 10) -> str:
         try:
+            # Android output is UTF-8; Windows would otherwise decode it as cp1252 and crash.
             result = subprocess.run(
-                self._cmd(*args), capture_output=True, text=True, timeout=timeout, check=False
+                self._cmd(*args),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                check=False,
             )
         except FileNotFoundError as exc:
             raise PhoneError(
@@ -56,8 +63,8 @@ class Phone:
         except subprocess.TimeoutExpired as exc:
             raise PhoneError(f"ADB timed out: {' '.join(args)}") from exc
         if result.returncode != 0:
-            raise PhoneError(result.stderr.strip() or result.stdout.strip() or "ADB command failed")
-        return result.stdout
+            raise PhoneError((result.stderr or "").strip() or (result.stdout or "").strip() or "ADB command failed")
+        return result.stdout or ""
 
     async def _arun(self, *args: str, timeout: float = 10) -> str:
         return await asyncio.to_thread(self._run, *args, timeout=timeout)
