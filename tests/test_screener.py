@@ -283,6 +283,7 @@ def test_brain_turns_and_consent(settings):
     assert request["thinking"] == {"type": "disabled"} and "fallbacks" not in request
     assert request["cache_control"] == {"type": "ephemeral"}
     assert request["system"][0]["cache_control"] == {"type": "ephemeral"}
+    assert request["output_config"]["format"]["type"] == "json_schema"
 
 
 def test_model_options_per_model():
@@ -293,7 +294,6 @@ def test_model_options_per_model():
     assert model_options("claude-sonnet-5-5")["fallbacks"] == "default"
     assert model_options("claude-sonnet-5-5", thinking_off=True)["thinking"] == {"type": "between_tools"}
     assert "thinking" not in model_options("claude-opus-5-5", thinking_off=True)  # can't be disabled
-    assert request["output_config"]["format"]["type"] == "json_schema"
 
 
 def test_simulation_loop_and_checks(settings, tmp_path):
