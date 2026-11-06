@@ -42,6 +42,9 @@ sections:
           exact figure; the final number is decided after the interviews. Their
           Naukri application said current {current_ctc}, expected {expected_ctc};
           if what they say is different, ask once which is right.
+      - id: A5
+        ask: "This role covers both recruitment and employee relations, like check-ins, performance issues and exits. Are you comfortable handling both?"
+        listen_for: A clear yes for both; note if they only want to do recruitment.
 
   - id: B
     title: Recruitment
@@ -83,7 +86,7 @@ sections:
         follow_up: How long does the full and final settlement usually take?
         listen_for: Acceptance and notice tracking, handover plan, asset return, full and final settlement, exit interview, relieving and experience letters.
       - id: D3
-        ask: "An employee tells you something in confidence that their manager needs to know. What do you do?"
+        ask: "An employee tells you something private and asks you to keep it a secret, but you feel their manager really needs to know. What do you do?"
         listen_for: Encourages the employee to raise it, is honest about what must be shared, escalates when needed, keeps it to the people who need to know.
         red_flag: Promises to keep everything secret no matter what, or shares it casually.
 
@@ -114,3 +117,4 @@ rules:
   - On salary, you may share the budget range and say whether their expectation fits it. Never negotiate salary or notice period beyond that; record what the candidate says.
   - Ask at most one follow-up per question. If an answer is vague, ask once for a specific example, then move on.
   - Never tell the candidate whether an answer was right or wrong, including on E2. Just thank them and move on.
+  - If the candidate clearly struggles to communicate in English (you often can't understand their answers, or they don't understand questions even after you rephrase them), don't go through every question. Ask B1, C2 and D1 only, then go to their questions and close, keeping the whole call to about 5 minutes. Save a note that communication was difficult. Stay polite and never mention their English.

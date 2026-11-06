@@ -744,3 +744,27 @@ def test_voice_agent_rejected_settings_raise_setup_error(settings):
                 await session._agent_conversation("Hello?", 0)
 
     asyncio.run(scenario())
+
+
+def test_voice_agent_hangs_up_after_goodbye_without_end_call(settings):
+    from websockets.asyncio.server import serve
+
+    async def forgetful(ws):
+        await ws.recv()
+        await ws.send(json.dumps({"type": "SettingsApplied"}))
+        await ws.send(json.dumps({"type": "ConversationText", "role": "assistant",
+                                  "content": "Thanks so much for your time. All the best!"}))
+        try:
+            async for _ in ws:
+                pass
+        except Exception:
+            pass
+
+    async def scenario():
+        async with serve(forgetful, "127.0.0.1", 0) as server:
+            port = server.sockets[0].getsockname()[1]
+            session = _fake_agent_session(settings, f"ws://127.0.0.1:{port}")
+            session._loop = asyncio.get_running_loop()
+            return await asyncio.wait_for(session._agent_conversation("Hello?", 0), 15)
+
+    assert asyncio.run(scenario()) == "agent_ended"

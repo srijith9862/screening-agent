@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from typing import Any
 
@@ -130,6 +131,13 @@ def build_settings(settings: Settings, prompt: str, greeting: str) -> dict[str, 
             "greeting": greeting,
         },
     }
+
+
+_GOODBYE = re.compile(r"(?i)\b(good ?bye|bye|all the best|have a (great|good|nice|lovely) (day|evening))\b")
+
+
+def is_goodbye(text: str) -> bool:
+    return bool(_GOODBYE.search(text))
 
 
 class AgentSetupError(RuntimeError):
@@ -288,6 +296,8 @@ class AgentCallSession(CallSession):
         last_state_check = 0.0
         ending_since: float | None = None
         agent_audio_at = 0.0  # when the agent last sent audio
+        candidate_speaking_since: float | None = None  # between UserStartedSpeaking and their transcript
+        goodbye_at: float | None = None  # when the agent said goodbye (backup hang-up if end_call never comes)
 
         while True:
             now = time.monotonic()
@@ -309,6 +319,17 @@ class AgentCallSession(CallSession):
                     await asyncio.sleep(0.5)
                     return "agent_ended"
 
+            # Backup hang-up: the agent said goodbye but never called end_call.
+            agent_quiet = now - agent_audio_at > 1.5 and self.engine.player.is_idle()
+            if (
+                goodbye_at is not None
+                and ending_since is None
+                and candidate_speaking_since is None
+                and agent_quiet
+                and now - goodbye_at > 4
+            ):
+                return "agent_ended"
+
             if not wrap_sent and self._elapsed() > wrap_s:
                 wrap_sent = True
                 note = f"[Time check: about {int(self._elapsed() // 60)} minutes have passed. Start wrapping up now.]"
@@ -320,7 +341,8 @@ class AgentCallSession(CallSession):
 
             # Silence: nobody has spoken for a while.
             agent_busy = not self.engine.player.is_idle() or now - agent_audio_at < 1.0
-            if agent_busy:
+            candidate_busy = candidate_speaking_since is not None and now - candidate_speaking_since < 90
+            if agent_busy or candidate_busy:
                 last_activity = now
             elif ending_since is None and now - last_activity > silence_s:
                 silences += 1
@@ -359,8 +381,14 @@ class AgentCallSession(CallSession):
                 if speaker == "candidate":
                     silences = 0
                     last_activity = time.monotonic()
+                    candidate_speaking_since = None
+                    if len(text.split()) > 4:
+                        goodbye_at = None  # they've raised something new; let the agent answer
+                elif text and is_goodbye(text):
+                    goodbye_at = time.monotonic()
             elif kind == "UserStartedSpeaking":
                 self.engine.player.clear()  # stop talking over the candidate
+                candidate_speaking_since = time.monotonic()
                 silences = 0
                 last_activity = time.monotonic()
             elif kind == "FunctionCallRequest":
@@ -373,7 +401,11 @@ class AgentCallSession(CallSession):
                 self._say(f"! Voice Agent error: {msg.get('description') or msg}")
                 return "agent_error"
             elif kind == "Warning":
-                log.warning("Voice Agent warning: %s", msg.get("description") or msg)
+                description = msg.get("description") or str(msg)
+                if "InjectAgentMessage" in description:
+                    log.debug("Voice Agent: %s", description)  # harmless: candidate was talking
+                else:
+                    log.warning("Voice Agent warning: %s", description)
 
     async def _handle_function(self, ws: Any, call: dict[str, Any]) -> None:
         name = call.get("name", "")

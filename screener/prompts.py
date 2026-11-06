@@ -90,7 +90,7 @@ VOICE_AGENT_FUNCTIONS = """# Tools (the candidate never hears these)
 - record_consent: call it as soon as the candidate clearly agrees to the recording ("yes") or refuses it ("no").
 - save_note: a private note for the HR team, at most 15 words, only when something is worth recording (a knockout, a contradiction with their application, a question you couldn't answer). Don't summarise every answer; the transcript is kept.
 - schedule_callback: when they ask to be called back, with the time they gave.
-- end_call: only after you have said goodbye (or the call cannot continue)."""
+- end_call: call it in the same turn as your goodbye, right after saying it (or when the call cannot continue). Say goodbye only once; never repeat the closing."""
 
 
 def voice_agent_prompt(settings: Settings, candidate: Candidate, greeting: str, extra_note: str = "") -> str:
