@@ -110,6 +110,12 @@ screener voice-test
 ```
 To try another voice: `screener voice-test --voice flux-meena-en`. To change it permanently, edit `deepgram.tts_voice` in `config/settings.yaml`, and `agent_name` if you want the agent to introduce itself by a different name.
 
+**Simulated candidates** (only needs the Anthropic key). Claude plays six candidates against the agent (strong, vague, asks lots of questions, refuses recording, wants a call-back, has knockouts), then you get transcripts, scorecards and automatic checks (AI disclosure, recording consent, no salary budget leaked):
+```bash
+screener simulate
+```
+Run a subset with `--only curious,declines`. A full run costs roughly $2-4 in API usage.
+
 **Text practice** (only needs the Anthropic key). You type as the candidate:
 ```bash
 screener practice --name "Harshitha"

@@ -399,6 +399,29 @@ def cmd_call(args: argparse.Namespace, settings: Settings) -> None:
     asyncio.run(run())
 
 
+def cmd_simulate(args: argparse.Namespace, settings: Settings) -> None:
+    """Claude plays several candidates; the agent screens each; prints a report."""
+    from .simulate import PERSONAS, checks, run_all
+
+    require_env("ANTHROPIC_API_KEY")
+    keys = [k.strip() for k in args.only.split(",")] if args.only else None
+    if keys:
+        unknown = set(keys) - {p.key for p in PERSONAS}
+        if unknown:
+            raise SystemExit(f"Unknown persona(s): {', '.join(unknown)}. Choose from: {', '.join(p.key for p in PERSONAS)}")
+    names = ", ".join(keys or [p.key for p in PERSONAS])
+    print(f"Running simulated calls ({names}). This takes a few minutes...", flush=True)
+    results, folder = asyncio.run(run_all(settings, keys, score=not args.no_score))
+    print()
+    for r in results:
+        issues = checks(r)
+        rec = r.card["recommendation"].upper() if r.card else "-"
+        status = "OK" if not issues else "CHECK: " + "; ".join(issues)
+        print(f"  {r.persona.key:<9} consent={r.consent:<8} recommendation={rec:<8} turns={len(r.transcript):<3} {status}")
+    print(f"\nFull transcripts and scorecards: {folder}")
+    print(f"Open {folder / 'SUMMARY.md'} first.")
+
+
 def cmd_score(args: argparse.Namespace, settings: Settings) -> None:
     from .scorer import format_transcript, score_call, scorecard_markdown
 
@@ -455,6 +478,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--yes", action="store_true", help="don't ask before each call")
     p.add_argument("--redo", action="store_true", help="also call candidates already screened")
     p.set_defaults(func=cmd_call)
+    p = sub.add_parser("simulate", help="test the agent against simulated candidates (no phone)")
+    p.add_argument("--only", help="comma-separated personas: strong,vague,curious,declines,callback,knockout")
+    p.add_argument("--no-score", action="store_true")
+    p.set_defaults(func=cmd_simulate)
     p = sub.add_parser("score", help="re-run the scorecard for a call folder")
     p.add_argument("folder")
     p.add_argument("--candidates", default=DEFAULT_CSV)

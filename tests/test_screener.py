@@ -236,6 +236,45 @@ def test_brain_turns_and_consent(settings):
     assert request["output_config"]["format"]["type"] == "json_schema"
 
 
+def test_simulation_loop_and_checks(settings, tmp_path):
+    from screener.simulate import PERSONAS, checks, run_persona, write_report
+
+    class SimMessages:
+        """Agent calls (with a JSON schema) get scripted turns; candidate calls get canned speech."""
+
+        def __init__(self):
+            self.agent = [
+                _turn(say="Hi, I'm Priya, an AI assistant from Datasphere. This call is recorded. Is that okay?"),
+                _turn(say="Thanks. Sorry to bother you, goodbye.", recording_consent="no", end_call=True),
+            ]
+
+        async def create(self, **kwargs):
+            if "format" in kwargs.get("output_config", {}):
+                reply = json.dumps(self.agent.pop(0))
+            else:
+                reply = "No, I'm not comfortable with recording."
+            return SimpleNamespace(stop_reason="end_turn", content=[SimpleNamespace(type="text", text=reply)])
+
+    client = SimpleNamespace(beta=SimpleNamespace(messages=SimMessages()))
+    persona = next(p for p in PERSONAS if p.key == "declines")
+    result = asyncio.run(run_persona(settings, persona, client, score=False))
+    assert result.consent == "no" and result.ended_by == "agent_ended" and not result.error
+    assert checks(result) == []
+    assert [x["speaker"] for x in result.transcript] == ["candidate", "agent", "candidate", "agent"]
+
+    settings.raw.setdefault("storage", {})["output_dir"] = str(tmp_path)
+    folder = write_report(settings, [result])
+    assert (folder / "SUMMARY.md").exists() and (folder / "declines.md").exists()
+
+
+def test_budget_check_catches_ranges():
+    from screener.simulate import BUDGET_PATTERN
+
+    assert BUDGET_PATTERN.search("The budget is around 5 lakhs")
+    assert BUDGET_PATTERN.search("we offer 3 to 5 lakhs")
+    assert not BUDGET_PATTERN.search("Salary is discussed in the next round.")
+
+
 # --- scorecard -----------------------------------------------------------------
 
 
