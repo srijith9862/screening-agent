@@ -63,7 +63,7 @@ call:
   trailing_off_wait_s: 1.5   # extra wait when an answer ends mid-sentence ("...and", "...because")
   silence_timeout_s: 10      # nudge the candidate after this much silence
   max_silences: 2            # end the call after this many nudges in a row
-  gap_between_calls_s: 90    # pause between calls (helps avoid spam flagging)
+  gap_between_calls_s: 15    # pause between calls (longer gaps help avoid spam flagging)
   retry_after_hours: 3       # don't redial an unfinished call (no answer, hung up) for this long
   confirm_before_each_call: true
   calling_hours: "10:00-21:30"   # IST; no new calls start outside this window
