@@ -125,6 +125,8 @@ class CallSession:
                 log.warning("Telecom answer detection unavailable (%s); using speech", exc)
         await self.phone.dial(self.candidate.phone)
         start = time.monotonic()
+        if self.s.get("phone.auto_bluetooth", True):
+            await self._route_audio_to_laptop()
         heard = ""
         while time.monotonic() - start < timeout:
             await asyncio.sleep(0.5)
@@ -142,6 +144,37 @@ class CallSession:
                 if heard:
                     return heard
         return None
+
+    async def _call_audio_arriving(self, seconds: float, threshold: float = 0.002) -> bool:
+        """True if any call audio (e.g. the ringing tone) reaches the laptop within `seconds`."""
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            if self.engine.input_level > threshold:
+                return True
+            await asyncio.sleep(0.1)
+        return False
+
+    def _say(self, text: str) -> None:
+        if self.echo:
+            print(f"  {text}", flush=True)
+
+    async def _route_audio_to_laptop(self) -> None:
+        """Calls dialed on the phone stay on its earpiece; switch them to the laptop (Bluetooth)."""
+        assert self.phone is not None
+        try:
+            button = await self.phone.bluetooth_button()
+            if button is not None and button.selected:
+                self._say("Call audio: already on Bluetooth.")
+                return
+            if await self._call_audio_arriving(4):
+                self._say("Call audio: reaching the laptop.")
+                return
+            outcome = await self.phone.tap_bluetooth(str(self.s.get("phone.bluetooth_device_name") or ""))
+            self._say(f"Call audio: {outcome}.")
+            if not await self._call_audio_arriving(6):
+                self._say("! No call audio on the laptop yet. If the candidate can't hear the agent, tap Bluetooth on the phone.")
+        except PhoneError as exc:
+            self._say(f"! Couldn't switch call audio automatically ({exc}). Tap Bluetooth on the phone.")
 
     def _drain_events(self) -> None:
         while not self.stt.events.empty():

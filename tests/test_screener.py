@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -144,6 +145,28 @@ def test_adb_output_with_non_ascii_bytes(tmp_path):
     fake.chmod(0o755)
     out = Phone(str(fake))._run("shell", "dumpsys", "telecom")
     assert out.startswith("state: ACTIVE") and count_telecom_active(out) == 1
+
+
+def test_find_bluetooth_button_in_ui_dump():
+    from screener.phone import BLUETOOTH_PATTERN, find_node, parse_ui_nodes
+
+    xml = (
+        "UI hierchary dumped to: /sdcard/screener_ui.xml\n"
+        "<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation=\"0\">"
+        '<node text="+91 90591 99427" content-desc="" clickable="false" bounds="[0,200][1080,300]" />'
+        '<node text="" content-desc="Speaker" clickable="true" checked="false" bounds="[100,1500][300,1700]" />'
+        '<node text="Bluetooth" content-desc="" clickable="false" bounds="[420,1660][660,1700]" />'
+        '<node text="" content-desc="Bluetooth" clickable="true" checked="true" bounds="[400,1500][680,1700]" />'
+        '<node text="Srijith9862" content-desc="" clickable="true" bounds="[0,800][1080,900]" />'
+        "</hierarchy>"
+    )
+    nodes = parse_ui_nodes(xml)
+    button = find_node(nodes, BLUETOOTH_PATTERN)
+    assert button is not None and button.clickable and button.selected
+    assert button.center == (540, 1600)
+    laptop = find_node(nodes, re.compile("Srijith9862", re.I))
+    assert laptop is not None and laptop.center == (540, 850)
+    assert parse_ui_nodes("ERROR: could not get idle state.") == []
 
 
 def test_parse_call_state():

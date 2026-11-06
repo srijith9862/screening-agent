@@ -78,7 +78,12 @@ How:
    - **Recording** tab → **Hi-Fi Cable Output** → Properties → Advanced → choose **48000 Hz** → OK.
 5. Want to listen in on calls? In the same window: **Recording** tab → **CABLE Output** → Properties → **Listen** tab → tick **Listen to this device** → pick your headphones.
 
-> **If Phone Link ignores the per-app setting:** in `mmsys.cpl`, right-click **CABLE Input** (Playback tab) and **Hi-Fi Cable Output** (Recording tab) → **Set as Default Communication Device**. Undo this when you're not using the agent.
+> **Calls the agent dials (from the phone) use the Windows *default* devices**, not the Phone Link setting above. While the agent is calling, in `mmsys.cpl`:
+> - **Playback** tab: right-click **CABLE Input** → **Set as Default Device**, and again → **Set as Default Communication Device**.
+> - **Recording** tab: right-click **Hi-Fi Cable Output** → **Set as Default Device**, and again → **Set as Default Communication Device**.
+> - To hear the call yourself: **Recording** tab → **CABLE Output** and **Hi-Fi Cable Output** → Properties → **Listen** → tick **Listen to this device** → playback through **Speakers (Realtek)** (pick it by name, not "Default").
+>
+> Switch the defaults back to your speakers and microphone when you're done calling.
 
 If your device names differ, run `screener devices` and update the `audio:` section of `config/settings.yaml`.
 
