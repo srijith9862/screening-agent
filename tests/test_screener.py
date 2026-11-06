@@ -279,8 +279,20 @@ def test_brain_turns_and_consent(settings):
     assert len(brain.messages) == 4  # a failed turn leaves history unchanged
 
     request = fake.calls[0]
-    assert request["fallbacks"] == "default"
+    assert request["model"] == "claude-haiku-5-5"
+    assert request["thinking"] == {"type": "disabled"} and "fallbacks" not in request
+    assert request["cache_control"] == {"type": "ephemeral"}
     assert request["system"][0]["cache_control"] == {"type": "ephemeral"}
+
+
+def test_model_options_per_model():
+    from screener.brain import model_options
+
+    assert model_options("claude-haiku-5-5") == {}
+    assert model_options("claude-haiku-5-5", thinking_off=True) == {"thinking": {"type": "disabled"}}
+    assert model_options("claude-sonnet-5-5")["fallbacks"] == "default"
+    assert model_options("claude-sonnet-5-5", thinking_off=True)["thinking"] == {"type": "between_tools"}
+    assert "thinking" not in model_options("claude-opus-5-5", thinking_off=True)  # can't be disabled
     assert request["output_config"]["format"]["type"] == "json_schema"
 
 

@@ -8,12 +8,15 @@ script_values:
   reply_timeline: within 3 working days
 
 claude:
-  # Live conversation. Low effort keeps the reply delay short on the phone.
-  live_model: claude-opus-5-5
+  # Live conversation: Claude Haiku 5.5, the cheapest and fastest model, with
+  # thinking off. For more careful (and ~20-40x pricier) replies use
+  # claude-sonnet-5-5 or claude-opus-5-5, and set live_thinking: true.
+  live_model: claude-haiku-5-5
   live_effort: low
-  # Scorecard after the call. Higher effort for a careful read of the transcript.
-  score_model: claude-opus-5-5
-  score_effort: high
+  live_thinking: false
+  # Scorecard after the call (one request per candidate).
+  score_model: claude-sonnet-5-5
+  score_effort: medium
 
 deepgram:
   stt_model: nova-3
@@ -50,8 +53,8 @@ phone:
   bluetooth_device_name: "Srijith9862"
 
 call:
-  max_minutes: 13            # hard stop
-  wrap_up_minute: 10         # agent is told to start wrapping up
+  max_minutes: 20            # hard stop
+  wrap_up_minute: 17         # agent is told to start wrapping up
   silence_timeout_s: 10      # nudge the candidate after this much silence
   max_silences: 2            # end the call after this many nudges in a row
   gap_between_calls_s: 90    # pause between calls (helps avoid spam flagging)

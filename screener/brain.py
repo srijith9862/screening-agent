@@ -20,6 +20,22 @@ log = logging.getLogger(__name__)
 # Server-side refusal fallback: if the model declines a turn, the API re-runs
 # it on Anthropic's recommended fallback model inside the same request.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+# Models that accept `fallbacks: "default"` (Haiku has no server-side fallback).
+_FALLBACK_MODELS = ("claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5")
+
+
+def model_options(model: str, thinking_off: bool = False) -> dict[str, Any]:
+    """Model-specific request options: refusal fallback and thinking."""
+    options: dict[str, Any] = {}
+    if model in _FALLBACK_MODELS:
+        options["betas"] = [FALLBACK_BETA]
+        options["fallbacks"] = "default"
+    if thinking_off:
+        if model.startswith("claude-haiku-5"):
+            options["thinking"] = {"type": "disabled"}  # allowed at effort high or below
+        elif model == "claude-sonnet-5-5":
+            options["thinking"] = {"type": "between_tools"}
+    return options
 
 TURN_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -125,8 +141,9 @@ class Brain:
         retried with the combined text.
         """
         request_messages = self.messages + [{"role": "user", "content": user_text}]
+        model = self.settings.get("claude.live_model", "claude-haiku-5-5")
         params = dict(
-            model=self.settings.get("claude.live_model", "claude-opus-5-5"),
+            model=model,
             max_tokens=4000,
             system=self._system,
             messages=request_messages,
@@ -134,8 +151,9 @@ class Brain:
                 "effort": self.settings.get("claude.live_effort", "low"),
                 "format": {"type": "json_schema", "schema": TURN_SCHEMA},
             },
-            betas=[FALLBACK_BETA],
-            fallbacks="default",
+            # Cache the growing conversation too, so each turn re-reads it cheaply.
+            cache_control={"type": "ephemeral"},
+            **model_options(model, thinking_off=not self.settings.get("claude.live_thinking", False)),
         )
         try:
             if on_say is None:

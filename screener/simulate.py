@@ -14,7 +14,7 @@ from typing import Any
 
 import anthropic
 
-from .brain import FALLBACK_BETA, Brain
+from .brain import Brain, model_options
 from .candidates import Candidate
 from .config import Settings
 from .scorer import format_transcript, score_call, scorecard_markdown
@@ -126,8 +126,7 @@ async def _candidate_reply(client: Any, system: str, history: list[dict[str, Any
         system=system,
         messages=history,
         output_config={"effort": "low"},
-        betas=[FALLBACK_BETA],
-        fallbacks="default",
+        **model_options(model, thinking_off=True),
     )
     if response.stop_reason == "refusal":
         return HANG_UP, response.content

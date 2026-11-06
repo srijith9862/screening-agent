@@ -7,7 +7,7 @@ from typing import Any
 
 import anthropic
 
-from .brain import FALLBACK_BETA
+from .brain import model_options
 from .candidates import Candidate
 from .config import Settings
 from .prompts import scoring_system_prompt
@@ -118,17 +118,17 @@ async def score_call(
     client: Any = None,
 ) -> dict[str, Any]:
     client = client or anthropic.AsyncAnthropic()
+    model = settings.get("claude.score_model", "claude-sonnet-5-5")
     async with client.beta.messages.stream(
-        model=settings.get("claude.score_model", "claude-opus-5-5"),
+        model=model,
         max_tokens=32000,
         system=scoring_system_prompt(settings),
         messages=[{"role": "user", "content": build_scoring_message(candidate, transcript, agent_notes)}],
         output_config={
-            "effort": settings.get("claude.score_effort", "high"),
+            "effort": settings.get("claude.score_effort", "medium"),
             "format": {"type": "json_schema", "schema": SCORECARD_SCHEMA},
         },
-        betas=[FALLBACK_BETA],
-        fallbacks="default",
+        **model_options(model),
     ) as stream:
         response = await stream.get_final_message()
 
