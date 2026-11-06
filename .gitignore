@@ -1,0 +1,14 @@
+# Secrets
+.env
+
+# Candidate data and call outputs contain personal information. Never commit.
+data/*
+!data/sample_candidates.csv
+output/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/

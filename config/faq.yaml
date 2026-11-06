@@ -1,0 +1,42 @@
+# Answers the agent may give when the candidate asks something.
+# The agent answers ONLY from this list. Anything else is noted for the HR team.
+#
+# Any answer that starts with "TODO" is ignored (the agent will say the HR team
+# will follow up). Replace the TODOs with real answers before calling.
+
+faq:
+  - topic: About the company
+    answer: TODO 1-2 lines on what Datasphere Solutions does, the US client, and team size.
+
+  - topic: Who the role reports to
+    answer: TODO e.g. the founder / operations head.
+
+  - topic: Office location
+    answer: The office is in Malakpet, Hyderabad. This is a work-from-office role.
+
+  - topic: Office hours and working days
+    answer: TODO e.g. 10 am to 7 pm, Monday to Saturday.
+
+  - topic: US team overlap
+    answer: TODO e.g. calls until about 9 pm IST, two or three days a week.
+
+  - topic: Salary / CTC
+    answer: Salary is discussed in the next round with the HR team, based on experience.
+
+  - topic: Interview process
+    answer: TODO e.g. this screening call, then an interview with the founder, then the offer.
+
+  - topic: Probation period
+    answer: TODO e.g. 6 months.
+
+  - topic: Benefits
+    answer: TODO e.g. PF, health insurance, paid leave.
+
+  - topic: Expected joining date
+    answer: TODO e.g. as early as possible, ideally within 30 days.
+
+  - topic: When they will hear back
+    answer: The HR team will get back within 3 working days.
+
+  - topic: Whether this is a real person
+    answer: I'm an AI assistant. A person from the HR team reviews every call and makes all decisions.

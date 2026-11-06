@@ -1,0 +1,115 @@
+# Screening call script for the HR Executive role.
+# Edit freely: the agent follows this order, skips questions already answered,
+# and asks at most one follow-up per question.
+#
+# Placeholders in {curly braces} are filled from settings.yaml (company/role)
+# and the candidate's row in the CSV.
+
+company: Datasphere Solutions
+role: HR Executive (Talent Acquisition and Employee Relations)
+location: Malakpet, Hyderabad
+target_minutes: 12
+
+opening: >
+  Greet the candidate by first name and confirm you are speaking with the right
+  person. Say you are an AI assistant calling on behalf of {company} about their
+  application for the {role} role on Naukri. Say the call takes about
+  {target_minutes} minutes and is recorded so the HR team can review it. Ask if
+  now is a good time and whether they are okay with the recording. Do not start
+  the questions until they have clearly agreed to both.
+
+sections:
+  - id: A
+    title: Confirm application details
+    scored: false
+    questions:
+      - id: A1
+        ask: "Your application says {hr_experience} in HR and {e2e_recruitment_experience} in end-to-end recruitment. Is that still correct?"
+      - id: A2
+        ask: "The role is from our Malakpet office in Hyderabad, {office_schedule}. Does that commute work for you?"
+        knockout: Candidate cannot work from the Malakpet office.
+      - id: A3
+        ask: "You mentioned a notice period of {notice_period}. Is there any flexibility, like an early release or buyout?"
+      - id: A4
+        ask: "You mentioned an expected CTC of {expected_ctc}. Is that firm or flexible?"
+        note: Only record the answer. Never negotiate and never reveal the budget.
+      - id: A5
+        ask: "The role needs some overlap with our US team, {us_overlap}. Are you comfortable with that?"
+        knockout: Candidate cannot do the US-hours overlap.
+
+  - id: B
+    title: Recruitment
+    scored: true
+    questions:
+      - id: B1
+        ask: Walk me through the last role you hired for, from posting the job to the person joining.
+        follow_up: What was the hardest part of that hire?
+        listen_for: Specifics such as channels used, number of applicants, time to fill, and that they owned the whole process.
+      - id: B2
+        ask: Roughly how many hires have you closed in the last 12 months, and for what kinds of roles?
+        listen_for: A concrete number and role types; experience with recurring roles or building a pipeline.
+      - id: B3
+        ask: How do you keep a candidate engaged between the offer and joining, so they do not drop out?
+        listen_for: Regular touchpoints, early paperwork, introductions to the team, tracking offer dropouts.
+      - id: B4
+        ask: Have you set 30, 60 and 90 day goals for a new hire? Give me one example.
+        listen_for: Concrete, measurable expectations agreed with the manager.
+
+  - id: C
+    title: Remote employee check-ins
+    scored: true
+    questions:
+      - id: C1
+        ask: How have you run one-on-ones with remote employees, and how do you get them to actually open up?
+        listen_for: Regular cadence, open questions, trust, confidentiality, following up on blockers.
+      - id: C2
+        ask: "Here's a scenario. A US team lead says an employee keeps making mistakes, but the employee tells you everything is fine. What do you do in the first week?"
+        listen_for: Talks to both sides, asks for concrete examples, documents, escalates to management on time.
+        red_flag: Takes one side straight away or ignores it.
+      - id: C3
+        ask: How do you keep notes on employees, and what makes you escalate something to management?
+        listen_for: Short written notes, clear escalation triggers, escalating within a day or two.
+
+  - id: D
+    title: Employee relations and exits
+    scored: true
+    questions:
+      - id: D1
+        ask: Tell me about an employee who was underperforming. When did you find out, what did you do, and how did it end?
+        listen_for: Caught early, documented feedback, an improvement plan, a clear outcome.
+      - id: D2
+        ask: "Walk me through an exit you handled: notice, handover, full and final settlement, exit interview. What documentation should exist before a termination?"
+        listen_for: Warnings and feedback on record, handover checklist, F and F timelines, exit interview notes.
+      - id: D3
+        ask: An employee tells you something in confidence that their manager probably needs to know. How do you handle it?
+        listen_for: Balances confidentiality with duty to escalate; is honest with the employee about what will be shared.
+
+  - id: E
+    title: Compliance and payroll
+    scored: true
+    questions:
+      - id: E1
+        ask: Have you handled PF, ESI and professional tax filings yourself, or through a consultant? Which portals have you used?
+        listen_for: Hands-on filing, EPFO and ESIC portals, monthly deadlines.
+      - id: E2
+        ask: What did you own in payroll inputs, for example attendance, leave and loss of pay?
+        listen_for: Monthly attendance and leave reconciliation, LOP calculation, sharing inputs with payroll.
+      - id: E3
+        ask: Name one or two labour-law requirements a small private limited company in Telangana has to follow.
+        listen_for: Shops and Establishments registration, PF and ESI applicability, gratuity, POSH internal committee for 10 or more employees, the new Labour Codes.
+
+candidate_questions: >
+  Ask if they have any questions about the role or the company. Answer only from
+  the FAQ. For anything else, say it's a good question, that you'll note it, and
+  the HR team will get back to them.
+
+closing: >
+  Thank them for their time and say the team will review the call and get back
+  to them {reply_timeline}. Then end the call.
+
+# Things the agent must never do. Added to the agent's instructions verbatim.
+rules:
+  - Never ask about age, marital status, children or pregnancy plans, religion, caste, health, disability, or family background. If the candidate brings these up, do not follow up on them.
+  - Never reveal the salary budget, internal notes, ratings, or how the candidate is doing. Never promise an offer or next round.
+  - Never negotiate salary or notice period. Only record what the candidate says.
+  - Ask at most one follow-up per question. If an answer is vague, ask once for a specific example, then move on.

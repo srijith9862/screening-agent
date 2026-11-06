@@ -1,0 +1,53 @@
+# Runtime settings. API keys do NOT go here: put them in .env (see .env.example).
+
+agent_name: Maya
+
+# Values used to fill {placeholders} in script.yaml.
+script_values:
+  office_schedule: TODO e.g. 10 am to 7 pm, Monday to Saturday
+  us_overlap: TODO e.g. calls until about 9 pm IST two or three days a week
+  reply_timeline: within 3 working days
+
+claude:
+  # Live conversation. Low effort keeps the reply delay short on the phone.
+  live_model: claude-opus-5-5
+  live_effort: low
+  # Scorecard after the call. Higher effort for a careful read of the transcript.
+  score_model: claude-opus-5-5
+  score_effort: high
+
+deepgram:
+  stt_model: nova-3
+  stt_language: en-IN        # Indian English. Use "en" if en-IN gives errors.
+  tts_voice: aura-2-thalia-en
+  endpointing_ms: 400        # silence before Deepgram marks speech as finished
+  utterance_end_ms: 1200     # longer gap that always ends the candidate's turn
+
+audio:
+  # Substring of the Windows device names. Run `python -m screener devices`
+  # to see the exact names on your laptop.
+  call_in_device: "CABLE Output"     # what the candidate says (Phone Link plays into "CABLE Input")
+  call_out_device: "CABLE-A Input"   # what the agent says (Phone Link's mic is "CABLE-A Output")
+
+phone:
+  adb_path: adb              # or full path, e.g. C:\platform-tools\adb.exe
+  device_serial: null        # set if more than one Android device is connected
+  default_country_code: "+91"
+  # "telecom": wait until Android reports the call as ACTIVE (most reliable).
+  # "speech": wait until the candidate says something (use if telecom detection fails).
+  answer_detection: telecom
+  ring_timeout_s: 45
+
+call:
+  max_minutes: 16            # hard stop
+  wrap_up_minute: 13         # agent is told to start wrapping up
+  silence_timeout_s: 10      # nudge the candidate after this much silence
+  max_silences: 2            # end the call after this many nudges in a row
+  gap_between_calls_s: 90    # pause between calls (helps avoid spam flagging)
+  confirm_before_each_call: true
+  calling_hours: "10:00-19:00"   # IST; calls outside this window are skipped
+  timezone: Asia/Kolkata
+
+storage:
+  output_dir: output
+  retention_days: 90         # `python -m screener purge` deletes older recordings
