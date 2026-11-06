@@ -450,6 +450,28 @@ def test_candidate_adding_to_answer_gets_one_reply(settings):
     ]
 
 
+def test_after_premade_greeting_agent_waits_for_candidate(settings):
+    from screener.speech import SpeechEvent
+
+    brain = ScriptedBrain([
+        {"say": "Hi Rajitha, I'm Priya, an AI assistant. This call is recorded. Is that okay?"},
+        {"say": "Thanks, goodbye.", "end_call": True},
+    ], think_s=0.1)
+    session = _fake_session(settings, brain)
+
+    async def scenario():
+        conversation = asyncio.create_task(session._conversation("[Call connected. You already greeted them.]", reply_now=False))
+        await asyncio.sleep(0.4)
+        assert brain.messages == []  # no Claude call until they reply
+        await session.stt.events.put(SpeechEvent("turn_end", "Yes, speaking."))
+        await asyncio.sleep(0.5)
+        await session.stt.events.put(SpeechEvent("turn_end", "Yes, that's fine."))
+        return await asyncio.wait_for(conversation, timeout=5)
+
+    asyncio.run(scenario())
+    assert brain.messages[0] == "[Call connected. You already greeted them.]\nYes, speaking."
+
+
 def test_words_after_reply_was_decided_are_not_resent(settings):
     """If Claude already answered the words, they must not be sent again."""
     from screener.speech import SpeechEvent

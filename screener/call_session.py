@@ -348,6 +348,9 @@ class CallSession:
         await self.stt.start()
         self.engine.start()
         result = CallResult(outcome="connected", recorder=self.recorder)
+        # Prepare the greeting while it rings, so it plays the moment they pick up.
+        greeting = f"Hello, am I speaking with {self.candidate.first_name}?"
+        greeting_audio = asyncio.create_task(self.tts.synthesize(greeting))
         try:
             if self.phone is not None:
                 try:
@@ -362,17 +365,31 @@ class CallSession:
                 print("  Rehearsal: say hello into your microphone to start.", flush=True)
                 hello = await self._first_words(wait_s=30)
             self._t0 = time.monotonic()
-            if not hello:
-                hello = await self._first_words()
             if hello:
                 self._log("candidate", hello)
-            opening = (
-                f'[Call connected. The candidate answered and said: "{hello}"]'
-                if hello
-                else "[Call connected. The candidate picked up but hasn't spoken yet.]"
-            )
-            result.ended_by = await self._conversation(opening)
+            try:
+                audio = await asyncio.wait_for(greeting_audio, timeout=3)
+            except Exception as exc:  # noqa: BLE001 - fall back to Claude writing the opening
+                log.warning("Pre-made greeting unavailable: %s", exc)
+                audio = None
+            if audio is not None:
+                self.engine.play(audio, TTS_RATE)
+                self._log("agent", greeting)
+                opening = (
+                    f'[Call connected. You already greeted them: "{greeting}". Do not greet again; '
+                    "continue with the opening from there once they reply.]"
+                )
+                result.ended_by = await self._conversation(opening, reply_now=False)
+            else:
+                opening = (
+                    f'[Call connected. The candidate answered and said: "{hello}"]'
+                    if hello
+                    else "[Call connected. The candidate picked up but hasn't spoken yet.]"
+                )
+                result.ended_by = await self._conversation(opening)
         finally:
+            if not greeting_audio.done():
+                greeting_audio.cancel()
             if self.phone is not None:
                 await self.phone.hang_up()
             self.engine.stop()
@@ -385,7 +402,9 @@ class CallSession:
         result.callback_request = self.brain.callback_request
         return result
 
-    async def _conversation(self, first_message: str) -> str:
+    async def _conversation(self, first_message: str, reply_now: bool = True) -> str:
+        """Runs the conversation. With reply_now=False the agent has already spoken
+        (the greeting) and waits for the candidate before its first Claude reply."""
         max_s = float(self.s.get("call.max_minutes", 16)) * 60
         wrap_s = float(self.s.get("call.wrap_up_minute", 13)) * 60
         silence_s = float(self.s.get("call.silence_timeout_s", 10))
@@ -457,7 +476,8 @@ class CallSession:
             if r.turn.end_call:
                 ending = True
 
-        start_reply()
+        if reply_now:
+            start_reply()
 
         while True:
             now = time.monotonic()
