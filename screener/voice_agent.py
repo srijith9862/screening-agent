@@ -315,7 +315,10 @@ class AgentCallSession(CallSession):
         loud_s = 0.0
         last_tick = time.monotonic()
         barge_level = float((self.s.get("voice_agent", {}) or {}).get("interrupt_level", 0.01))
-        barge_needed_s = float((self.s.get("voice_agent", {}) or {}).get("interrupt_after_s", 0.6))
+        barge_needed_s = float((self.s.get("voice_agent", {}) or {}).get("interrupt_after_s", 1.2))
+        # Until the candidate has answered the recording question, Priya always finishes
+        # speaking, so everyone hears who's calling and why.
+        protect_opening = bool((self.s.get("voice_agent", {}) or {}).get("protect_opening", True))
         # Minimum pause between the candidate going quiet and Priya starting to reply.
         min_gap_s = float((self.s.get("voice_agent", {}) or {}).get("min_reply_gap_s", 1.5))
         candidate_voice_at = 0.0  # last moment the candidate's line was loud like speech
@@ -345,10 +348,12 @@ class AgentCallSession(CallSession):
             if barge_since is not None:
                 if self.engine.input_level > barge_level:
                     loud_s += tick
-                if loud_s >= barge_needed_s:
+                if protect_opening and self.consent == "unknown":
+                    barge_since = None  # never cut the introduction short
+                elif loud_s >= barge_needed_s:
                     self.engine.player.clear()  # real interruption: stop talking over them
                     barge_since = None
-                elif now - barge_since > 1.5:
+                elif now - barge_since > barge_needed_s + 1.0:
                     barge_since = None  # just noise; keep talking
 
             if self.phone is not None and now - last_state_check > 1.5:
