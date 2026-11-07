@@ -37,16 +37,22 @@ sections:
       - id: A4
         ask: "What's your current CTC, and what are you expecting for this role?"
         note: >-
-          Our budget for this role is {salary_budget}. Once they answer, tell them
-          plainly how their expectation compares. Within the budget: say that fits
-          our budget. Above {salary_budget_max}: say politely it's above our budget,
-          which goes up to {salary_budget_max}, and ask if they'd be open to a role
-          in that range. Below the range: just note it. Don't haggle or promise an
-          exact figure; the final number is decided after the interviews. Their
-          Naukri application said current {current_ctc}, expected {expected_ctc};
-          if what they say is different, ask once which is right.
-        knockout: Expects more than {salary_budget_max} and isn't open to a role within our budget.
-        if_knockout_say: "Our budget for this role goes up to {salary_budget_max}, so it may not be the right fit right now."
+          PRIVATE: our budget is {salary_budget}, but we want to keep hiring cost
+          low, so NEVER say the upper limit ({salary_budget_max}) or any range out
+          loud. Respond to what they say: (1) Current CTC around 3 lakhs or less, or
+          an expectation up to {salary_budget_max}: say "That's well within our
+          range, and depending on your interview performance there's room for a
+          raise." (2) Current CTC below 3 lakhs (e.g. 2 lakhs): don't treat it as a
+          problem; say it works within our range, and save a note "low current CTC,
+          possible offer around 2.5 lakhs". (3) Expectation above
+          {salary_budget_max}: say "That's a bit above what we've budgeted for this
+          role. Would you be open to discussing within our range?" without giving a
+          number. Never promise an exact figure or the raise amount; the final number
+          is decided after the interviews. Their Naukri application said current
+          {current_ctc}, expected {expected_ctc}; if what they say is different, ask
+          once which is right.
+        knockout: Expects more than {salary_budget_max} and isn't open to discussing within our range.
+        if_knockout_say: "Our budget for this role is lower than that, so it may not be the right fit right now."
       - id: A5
         ask: "This role covers both recruitment, mainly the initial screening of candidates, and employee relations, like check-ins, performance issues and exits. Have you worked on both, and are you comfortable handling both?"
         listen_for: Hands-on experience with both initial screening and employee relations, and willingness to do both.
@@ -121,7 +127,7 @@ closing: >
 rules:
   - Never ask about age, marital status, children or pregnancy plans, religion, caste, health, disability, or family background. If the candidate brings these up, do not follow up on them.
   - Never reveal internal notes, ratings, or how the candidate is doing. Never promise an offer, an exact salary, or a next round.
-  - On salary, you may share the budget range and say whether their expectation fits it. Never negotiate salary or notice period beyond that; record what the candidate says.
+  - On salary, never say the budget's upper limit or any range out loud. Follow the A4 note, and never negotiate salary or notice period; record what the candidate says.
   - Ask at most one follow-up per question. If an answer is vague, ask once for a specific example, then move on.
   - Never tell the candidate whether an answer was right or wrong, including on E2. Just thank them and move on.
   - If the candidate clearly struggles to communicate in English (you often can't understand their answers, or they don't understand questions even after you rephrase them), don't go through every question. Ask B1, C2 and D1 only, then go to their questions and close, keeping the whole call to about 5 minutes. Save a note that communication was difficult. Stay polite and never mention their English.

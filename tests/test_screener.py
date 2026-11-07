@@ -333,7 +333,12 @@ def test_simulation_loop_and_checks(settings, tmp_path):
 def test_over_budget_check():
     from screener.simulate import OVER_BUDGET_PATTERN
 
-    assert OVER_BUDGET_PATTERN.search("Six lakhs is a bit above our budget, which goes up to 5 lakhs.")
+    from screener.simulate import CEILING_PATTERN
+
+    assert OVER_BUDGET_PATTERN.search("That's a bit above what we've budgeted for this role.")
+    assert CEILING_PATTERN.search("Our budget goes up to 5 lakhs.")
+    assert CEILING_PATTERN.search("The range is three to five lakhs.")
+    assert not CEILING_PATTERN.search("That's well within our range, and there's room for a raise.")
     assert OVER_BUDGET_PATTERN.search("That exceeds our budget.")
     assert not OVER_BUDGET_PATTERN.search("That fits within our budget.")
 

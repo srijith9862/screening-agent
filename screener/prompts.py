@@ -167,6 +167,7 @@ def scoring_system_prompt(settings: Settings) -> str:
 - The transcript comes from speech recognition and may contain errors. Do not penalise accent, grammar or transcription mistakes; judge clarity of communication only by whether answers were understandable and to the point.
 - Ignore anything about age, gender, marital status, family, religion, caste, health or disability. Never use it in the score or mention it.
 - Knockouts are the "KNOCKOUT if" lines in the script (office, joining within about a month, salary within budget, both recruitment and employee relations). List each one that applies. If the call ended early because of a knockout, set call_outcome to "partial", score the sections that weren't reached as 0, and recommend "reject".
+- Salary: a low current CTC (below 3 lakhs) is a cost advantage, not a weakness. If they are otherwise good, add "possible lower-cost hire (around 2.5 lakhs)" to strengths. within_budget is "yes" if their expectation is at or below 5 lakhs per annum.
 - evidence_quote must be a short quote from the candidate's own words.
 - Recommendation: "advance" if no knockouts and the scored sections are mostly 3 or above; "reject" only for clear knockouts or consistently weak answers; otherwise "hold". This is a suggestion; a human makes the decision.
 - If the call did not really happen (no answer, wrong person, declined recording, call back later), set call_outcome accordingly, score sections 0, and use recommendation "hold"."""

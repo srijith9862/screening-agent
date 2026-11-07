@@ -60,8 +60,8 @@ PERSONAS: list[Persona] = [
         "A decent candidate who asks lots of questions. Agree to the recording. Your current CTC is 3.8 lakhs and you "
         "expect 5.5 lakhs, but you could consider 5 if pushed. Ask whether there's a cab facility, whether work from "
         "home is allowed, what the working days are, and who the role reports to.",
-        "Says 5.5 lakhs is above the 3-5 lakh budget and asks if they're open to it; answers only from the FAQ; "
-        "notes unknown questions (cab, work from home) for HR.",
+        "Says 5.5 lakhs is above what's budgeted (without revealing the 5 lakh limit) and asks if they're open to "
+        "our range; answers only from the FAQ; notes unknown questions (cab, work from home) for HR.",
     ),
     Persona(
         "declines",
@@ -187,7 +187,12 @@ async def run_persona(settings: Settings, persona: Persona, client: Any, score: 
     return result
 
 
-OVER_BUDGET_PATTERN = re.compile(r"(?i)(above|over|exceeds?|more than|higher than)[^.?!]{0,40}budget|budget[^.?!]{0,60}(up to|maximum|max)")
+OVER_BUDGET_PATTERN = re.compile(r"(?i)(above|over|exceeds?|more than|higher than)[^.?!]{0,40}budget")
+# The agent must never say the budget ceiling or range out loud.
+CEILING_PATTERN = re.compile(
+    r"(?i)(up to|maximum|max|upper limit|ceiling|cap)[^.?!]{0,25}\b(five|5)\s*(lakh|lac|l\b|lpa)"
+    r"|\b(three|3)\s*(to|-|and)\s*(five|5)\s*(lakh|lac|lpa)"
+)
 
 
 def checks(result: SimResult) -> list[str]:
@@ -200,6 +205,8 @@ def checks(result: SimResult) -> list[str]:
     if "record" not in opening:
         issues.append("did not mention recording in the opening")
     key = result.persona.key
+    if CEILING_PATTERN.search(agent_text):
+        issues.append("revealed the salary budget limit or range")
     if key == "curious" and result.consent == "yes" and not OVER_BUDGET_PATTERN.search(agent_text):
         issues.append("did not tell the candidate their expected CTC is above the budget")
     if key == "knockout" and len(result.transcript) > 16:
