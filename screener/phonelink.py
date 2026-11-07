@@ -158,13 +158,16 @@ exit 1
 TRANSFER_NAMES = r"(?i)transfer|switch (audio |call )?to (this )?(pc|laptop|computer)|move (the )?call|use (this )?(pc|laptop)"
 
 
-def build_transfer_script(timeout_s: int = 20) -> str:
-    return _TRANSFER_SCRIPT.replace("__TIMEOUT__", str(int(timeout_s))).replace("__PATTERN__", TRANSFER_NAMES)
+END_CALL_NAMES = r"(?i)^(end call|hang up|end the call|end)$"
 
 
-def _run_transfer(timeout_s: int) -> tuple[bool, str]:
+def build_transfer_script(timeout_s: int = 20, pattern: str = TRANSFER_NAMES) -> str:
+    return _TRANSFER_SCRIPT.replace("__TIMEOUT__", str(int(timeout_s))).replace("__PATTERN__", pattern)
+
+
+def _run_transfer(timeout_s: int, pattern: str = TRANSFER_NAMES) -> tuple[bool, str]:
     result = subprocess.run(
-        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", build_transfer_script(timeout_s)],
+        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", build_transfer_script(timeout_s, pattern)],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -174,6 +177,16 @@ def _run_transfer(timeout_s: int) -> tuple[bool, str]:
     )
     output = (result.stdout or "").strip() or (result.stderr or "").strip()
     return result.returncode == 0 and output.startswith("CLICKED"), output
+
+
+async def click_end_call(timeout_s: int = 4) -> tuple[bool, str]:
+    """Clicks Phone Link's End call button (Phone Link calls ignore the phone's end-call key)."""
+    if not available():
+        return False, "Phone Link only works on Windows"
+    try:
+        return await asyncio.to_thread(_run_transfer, timeout_s, END_CALL_NAMES)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, str(exc)
 
 
 async def click_transfer(timeout_s: int = 20) -> tuple[bool, str]:

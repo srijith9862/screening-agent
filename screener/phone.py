@@ -142,6 +142,14 @@ class Phone:
             raise PhoneError(f"Refusing to dial an invalid number: {number!r}")
         await self._arun("shell", "am", "start", "-a", "android.intent.action.CALL", "-d", f"tel:{number}")
 
+    async def tap_end_call_on_screen(self) -> bool:
+        """Taps the red end-call button on the phone's call screen."""
+        button = find_node(await self.screen_nodes(), re.compile(r"(?i)^(end call|end|hang up|decline)$"))
+        if button is None:
+            return False
+        await self.tap(*button.center)
+        return True
+
     async def hang_up(self) -> None:
         try:
             await self._arun("shell", "input", "keyevent", "KEYCODE_ENDCALL")

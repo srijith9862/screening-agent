@@ -14,8 +14,14 @@ voice_agent:
   listen_model: flux-general-en
   # End-of-turn detection: higher = waits longer before replying (fewer
   # interruptions while candidates think), lower = replies faster.
-  eot_threshold: 0.8
-  eot_timeout_ms: 4000      # reply after this much silence even if unsure they've finished
+  eot_threshold: 0.9
+  eot_timeout_ms: 5000      # reply after this much silence even if unsure they've finished
+  # Priya stops talking only if the candidate's sound lasts this long above this
+  # level (so coughs and background noise don't cut her off).
+  interrupt_after_s: 0.6
+  # Priya waits until the candidate has been quiet for at least this long before replying.
+  min_reply_gap_s: 1.5
+  interrupt_level: 0.01
   # eager_eot_threshold: 0.5  # uncomment to start preparing replies earlier (lower latency, more LLM use)
 
 # Values used to fill {placeholders} in script.yaml.

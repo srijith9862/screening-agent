@@ -808,3 +808,43 @@ def test_callbacks_are_skipped_until_due_then_called(tmp_path, settings):
 def test_callback_note_reaches_the_agent(settings):
     candidate = Candidate(name="Rajitha B", fields={"is_callback": "yes"})
     assert "calling back as they asked" in candidate_context(settings, candidate)
+
+
+def test_voice_agent_waits_for_a_pause_before_replying(settings):
+    from websockets.asyncio.server import serve
+
+    settings.raw.setdefault("voice_agent", {})["min_reply_gap_s"] = 0.6
+    timeline = {}
+
+    async def quick_replier(ws):
+        await ws.recv()
+        await ws.send(json.dumps({"type": "SettingsApplied"}))
+        await asyncio.sleep(0.1)
+        await ws.send(b"\x00\x00" * 2400)  # reply arrives while the candidate is still audible
+        await asyncio.sleep(1.5)
+        await ws.send(json.dumps({"type": "FunctionCallRequest", "functions": [
+            {"id": "e", "name": "end_call", "arguments": "{\"reason\": \"completed\"}", "client_side": True}]}))
+        try:
+            async for _ in ws:
+                pass
+        except Exception:
+            pass
+
+    async def scenario():
+        async with serve(quick_replier, "127.0.0.1", 0) as server:
+            port = server.sockets[0].getsockname()[1]
+            session = _fake_agent_session(settings, f"ws://127.0.0.1:{port}")
+            session._loop = asyncio.get_running_loop()
+            session.engine.input_level = 0.05  # candidate still making sound
+            task = asyncio.create_task(session._agent_conversation("Hello?", 0))
+            await asyncio.sleep(0.4)
+            timeline["while_talking"] = len(session._played)
+            session.engine.input_level = 0.0  # they go quiet
+            await asyncio.sleep(0.3)
+            timeline["just_after"] = len(session._played)
+            await asyncio.sleep(0.6)
+            timeline["after_gap"] = len(session._played)
+            return await asyncio.wait_for(task, 10)
+
+    assert asyncio.run(scenario()) == "agent_ended"
+    assert timeline == {"while_talking": 0, "just_after": 0, "after_gap": 1}

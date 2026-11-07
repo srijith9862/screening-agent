@@ -53,6 +53,7 @@ def live_system_prompt(settings: Settings) -> str:
 - Text in [square brackets] comes from the call software (connection status, silence, time checks, whether your last reply was actually heard), not from the candidate.
 - People often pause mid-answer and then add more. If their message adds to an earlier answer or asks you something, respond to that first, then continue. Never ask a question you have already asked unless they asked you to repeat it or the software says they didn't hear it.
 - If the candidate is clearly still thinking ("umm", "let me think") or their answer stops mid-sentence, don't repeat the question and don't move on: just say something brief like "Take your time." or "Sure, go on."
+- Phone lines pick up background noise, so the transcript sometimes contains a lone "mm", "okay", "uh", "yes" or a stray word that isn't a real answer. If you've just asked a question and their message is only one of these, don't treat it as their answer and don't repeat the question: say at most "Go ahead." (or nothing more than that) and let them answer. Don't say "Take your time" more than once in a row.
 - Keep the first sentence of every reply short (a brief acknowledgement is fine), because it is spoken while you are still finishing the rest.
 
 # Call flow

@@ -99,8 +99,8 @@ def build_settings(settings: Settings, prompt: str, greeting: str) -> dict[str, 
         "model": va.get("listen_model", "flux-general-en"),
         "version": "v2",
         "keyterms": va.get("keyterms") or DEFAULT_KEYTERMS,
-        "eot_threshold": float(va.get("eot_threshold", 0.8)),
-        "eot_timeout_ms": int(va.get("eot_timeout_ms", 4000)),
+        "eot_threshold": float(va.get("eot_threshold", 0.9)),
+        "eot_timeout_ms": int(va.get("eot_timeout_ms", 5000)),
     }
     if va.get("eager_eot_threshold") is not None:
         listen["eager_eot_threshold"] = float(va["eager_eot_threshold"])
@@ -185,7 +185,7 @@ class AgentCallSession(CallSession):
                     self._audio_sink = self._feed_agent
                     await self.stt.stop()
                 if answered is None:
-                    await self.phone.hang_up()
+                    await self._hang_up()
                     return CallResult(outcome="no_answer")
             self._t0 = time.monotonic()
             delay = float(self.s.get("call.greeting_delay_s", 2))
@@ -195,8 +195,7 @@ class AgentCallSession(CallSession):
                 self._say(f"! Deepgram Voice Agent couldn't start ({exc}). Continuing with the classic engine.")
                 ended_by = await self._classic_fallback()
         finally:
-            if self.phone is not None:
-                await self.phone.hang_up()
+            await self._hang_up()
             self.engine.stop()
             await self.tts.close()
         return CallResult(
@@ -298,11 +297,46 @@ class AgentCallSession(CallSession):
         agent_audio_at = 0.0  # when the agent last sent audio
         candidate_speaking_since: float | None = None  # between UserStartedSpeaking and their transcript
         goodbye_at: float | None = None  # when the agent said goodbye (backup hang-up if end_call never comes)
+        # Barge-in: only stop Priya if the candidate's sound is sustained (not a cough or background noise).
+        barge_since: float | None = None
+        loud_s = 0.0
+        last_tick = time.monotonic()
+        barge_level = float((self.s.get("voice_agent", {}) or {}).get("interrupt_level", 0.01))
+        barge_needed_s = float((self.s.get("voice_agent", {}) or {}).get("interrupt_after_s", 0.6))
+        # Minimum pause between the candidate going quiet and Priya starting to reply.
+        min_gap_s = float((self.s.get("voice_agent", {}) or {}).get("min_reply_gap_s", 1.5))
+        candidate_voice_at = 0.0  # last moment the candidate's line was loud like speech
+        held: list[Any] = []  # start of Priya's reply, waiting for the pause
+        held_loud_s = 0.0
 
         while True:
             now = time.monotonic()
+            tick, last_tick = now - last_tick, now
             if self._elapsed() > max_s + 60:
                 return "time_limit"
+
+            if self.engine.input_level > barge_level:
+                candidate_voice_at = now
+                if held:
+                    held_loud_s += tick
+            # Release a held reply once they've been quiet long enough; drop it if they kept talking.
+            if held:
+                if held_loud_s >= barge_needed_s:
+                    held.clear()  # they carried on talking; Deepgram will reply to the full answer
+                elif now - candidate_voice_at >= min_gap_s:
+                    for audio in held:
+                        self.engine.play(audio, AGENT_OUTPUT_RATE)
+                    held.clear()
+                    agent_audio_at = now
+
+            if barge_since is not None:
+                if self.engine.input_level > barge_level:
+                    loud_s += tick
+                if loud_s >= barge_needed_s:
+                    self.engine.player.clear()  # real interruption: stop talking over them
+                    barge_since = None
+                elif now - barge_since > 1.5:
+                    barge_since = None  # just noise; keep talking
 
             if self.phone is not None and now - last_state_check > 1.5:
                 last_state_check = now
@@ -314,13 +348,13 @@ class AgentCallSession(CallSession):
 
             # Hang up once the goodbye has finished playing.
             if ending_since is not None:
-                quiet = now - agent_audio_at > 1.2 and self.engine.player.is_idle()
+                quiet = now - agent_audio_at > 1.2 and self.engine.player.is_idle() and not held
                 if quiet or now - ending_since > 12:
                     await asyncio.sleep(0.5)
                     return "agent_ended"
 
             # Backup hang-up: the agent said goodbye but never called end_call.
-            agent_quiet = now - agent_audio_at > 1.5 and self.engine.player.is_idle()
+            agent_quiet = now - agent_audio_at > 1.5 and self.engine.player.is_idle() and not held
             if (
                 goodbye_at is not None
                 and ending_since is None
@@ -340,7 +374,7 @@ class AgentCallSession(CallSession):
                 ending_since = now
 
             # Silence: nobody has spoken for a while.
-            agent_busy = not self.engine.player.is_idle() or now - agent_audio_at < 1.0
+            agent_busy = not self.engine.player.is_idle() or now - agent_audio_at < 1.0 or bool(held)
             candidate_busy = candidate_speaking_since is not None and now - candidate_speaking_since < 90
             if agent_busy or candidate_busy:
                 last_activity = now
@@ -359,7 +393,7 @@ class AgentCallSession(CallSession):
                     ending_since = now
 
             try:
-                raw = await asyncio.wait_for(ws.recv(), timeout=0.2)
+                raw = await asyncio.wait_for(ws.recv(), timeout=0.1)
             except asyncio.TimeoutError:
                 continue
             except Exception as exc:  # noqa: BLE001
@@ -367,8 +401,16 @@ class AgentCallSession(CallSession):
                 return "agent_disconnected"
 
             if isinstance(raw, bytes):
-                self.engine.play(pcm16_to_float(raw), AGENT_OUTPUT_RATE)
-                agent_audio_at = time.monotonic()
+                audio = pcm16_to_float(raw)
+                now = time.monotonic()
+                starting_reply = self.engine.player.is_idle() and not held
+                if held or (starting_reply and candidate_voice_at and now - candidate_voice_at < min_gap_s):
+                    if not held:
+                        held_loud_s = 0.0
+                    held.append(audio)  # wait for a natural pause before speaking
+                else:
+                    self.engine.play(audio, AGENT_OUTPUT_RATE)
+                agent_audio_at = now
                 continue
 
             msg = json.loads(raw)
@@ -387,7 +429,8 @@ class AgentCallSession(CallSession):
                 elif text and is_goodbye(text):
                     goodbye_at = time.monotonic()
             elif kind == "UserStartedSpeaking":
-                self.engine.player.clear()  # stop talking over the candidate
+                if not self.engine.player.is_idle():
+                    barge_since, loud_s = time.monotonic(), 0.0  # decide shortly if it's real speech
                 candidate_speaking_since = time.monotonic()
                 silences = 0
                 last_activity = time.monotonic()

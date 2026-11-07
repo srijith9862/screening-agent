@@ -328,6 +328,37 @@ class CallSession:
             await asyncio.sleep(0.5)
         return False
 
+    async def _hang_up(self) -> None:
+        """Ends the call: Phone Link's End call button, the phone's end-call key, then
+        checks it really ended (tapping End on the phone's screen as a last resort)."""
+        if self.phone is None:
+            return
+        try:
+            if await self.phone.call_state() == CALL_STATE_IDLE:
+                return
+        except PhoneError:
+            pass
+        if phonelink.available():
+            await phonelink.click_end_call(timeout_s=3)
+        await self.phone.hang_up()
+        for _ in range(6):
+            await asyncio.sleep(0.5)
+            try:
+                if await self.phone.call_state() == CALL_STATE_IDLE:
+                    return
+            except PhoneError:
+                return
+        try:
+            if await self.phone.tap_end_call_on_screen():
+                await asyncio.sleep(1)
+        except PhoneError:
+            pass
+        try:
+            if await self.phone.call_state() != CALL_STATE_IDLE:
+                self._say("! Couldn't hang up automatically. Please end the call.")
+        except PhoneError:
+            pass
+
     async def _call_audio_arriving(self, seconds: float, threshold: float = 0.002) -> bool:
         """True if any call audio (e.g. the ringing tone) reaches the laptop within `seconds`."""
         end = time.monotonic() + seconds
@@ -401,7 +432,7 @@ class CallSession:
                     log.error("Dialing failed: %s", exc)
                     return CallResult(outcome="dial_failed", ended_by=str(exc))
                 if hello is None:
-                    await self.phone.hang_up()
+                    await self._hang_up()
                     return CallResult(outcome="no_answer")
             else:
                 print("  Rehearsal: say hello into your microphone to start.", flush=True)
@@ -434,8 +465,7 @@ class CallSession:
         finally:
             if not greeting_audio.done():
                 greeting_audio.cancel()
-            if self.phone is not None:
-                await self.phone.hang_up()
+            await self._hang_up()
             self.engine.stop()
             await self.stt.stop()
             await self.tts.close()
