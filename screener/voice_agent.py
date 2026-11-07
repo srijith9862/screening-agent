@@ -44,7 +44,7 @@ FUNCTIONS: list[dict[str, Any]] = [
         "parameters": {
             "type": "object",
             "properties": {
-                "question_id": {"type": "string", "description": "e.g. A4, B2, or 'general'"},
+                "question_id": {"type": "string", "description": "e.g. A5, B2, or 'general'"},
                 "note": {"type": "string"},
             },
             "required": ["note"],

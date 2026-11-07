@@ -27,6 +27,7 @@ SECTION_SCHEMA = {
 
 FACT_KEYS = [
     "reason_for_change",
+    "current_location",
     "hr_experience",
     "recruitment_experience",
     "office_commute_ok",

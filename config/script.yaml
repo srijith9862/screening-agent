@@ -32,14 +32,20 @@ sections:
         ask: "What's making you look for a change right now?"
         listen_for: A clear, positive reason such as growth, a bigger role or the commute. Note anything that suggests they may leave quickly.
       - id: A2
+        ask: "Where are you currently located?"
+        note: >-
+          If they're outside Hyderabad, ask once whether they'd relocate to Hyderabad
+          before joining. Then ask the commute question with their location in mind.
+        listen_for: Their area or city, and willingness to relocate if they're outside Hyderabad.
+      - id: A3
         ask: "The role is from our Malakpet office in Hyderabad, {office_schedule}, 5 days a week. Does that commute work for you?"
         knockout: Can't work from the Malakpet office, 5 days a week (including wanting remote or hybrid only).
         if_knockout_say: "We're looking for someone who can work from our Malakpet office five days a week."
-      - id: A3
+      - id: A4
         ask: "You mentioned a notice period of {notice_period}. We'd like someone who can join soon. Is there any flexibility, like an early release or buyout?"
         knockout: Can't join within about a month (notice longer than 30 days with no early release or buyout).
         if_knockout_say: "We're looking for someone who can join within about a month."
-      - id: A4
+      - id: A5
         ask: "What's your current CTC, and what are you expecting for this role?"
         note: >-
           PRIVATE: our budget is {salary_budget}, but we want to keep hiring cost
@@ -58,7 +64,7 @@ sections:
           once which is right.
         knockout: Expects more than {salary_budget_max} and isn't open to discussing within our range.
         if_knockout_say: "Our budget for this role is lower than that, so it may not be the right fit right now."
-      - id: A5
+      - id: A6
         ask: "This role covers both recruitment, mainly the initial screening of candidates, and employee relations, like check-ins, performance issues and exits. Have you worked on both, and are you comfortable handling both?"
         listen_for: Hands-on experience with both initial screening and employee relations, and willingness to do both.
         knockout: Has not worked on, or doesn't want to handle, both recruitment (initial screening) and employee relations.
@@ -139,7 +145,7 @@ closing: >
 rules:
   - Never ask about age, marital status, children or pregnancy plans, religion, caste, health, disability, or family background. If the candidate brings these up, do not follow up on them.
   - Never reveal internal notes, ratings, or how the candidate is doing. Never promise an offer, an exact salary, or a next round.
-  - On salary, never say the budget's upper limit or any range out loud. Follow the A4 note, and never negotiate salary or notice period; record what the candidate says.
+  - On salary, never say the budget's upper limit or any range out loud. Follow the A5 note, and never negotiate salary or notice period; record what the candidate says.
   - Ask at most one follow-up per question. If an answer is vague, ask once for a specific example, then move on.
   - Never tell the candidate whether an answer was right or wrong, including on E2. Just thank them and move on.
   - If the candidate clearly struggles to communicate in English (you often can't understand their answers, or they don't understand questions even after you rephrase them), don't go through every question. Ask B1, C2 and D1 only, then go to their questions and close, keeping the whole call to about 5 minutes. Save a note that communication was difficult. Stay polite and never mention their English.
