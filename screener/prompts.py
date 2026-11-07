@@ -13,6 +13,8 @@ def render_script(settings: Settings, values: dict[str, Any], include_rubric: bo
     lines: list[str] = []
     for section in script.get("sections", []):
         lines.append(f"Section {section['id']}: {section['title']}")
+        if section.get("transition") and not include_rubric:
+            lines.append(f"  Before the first question of this section, say: {fill(str(section['transition']), values)}")
         for q in section.get("questions", []):
             lines.append(f"  [{q['id']}] {fill(str(q['ask']), values)}")
             if q.get("follow_up"):

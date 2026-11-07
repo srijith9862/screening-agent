@@ -62,6 +62,7 @@ sections:
   - id: B
     title: Recruitment
     scored: true
+    transition: "Let's start with a few questions on recruitment."
     questions:
       - id: B1
         ask: "Tell me about the last role you hired for: which platforms you used, how many applicants you screened, and how long it took from posting to the person joining."
@@ -78,6 +79,7 @@ sections:
   - id: C
     title: Remote employee check-ins
     scored: true
+    transition: "Thank you. Let us move on to the employee relations based questions."
     questions:
       - id: C1
         ask: "How often did you check in with remote employees, and tell me about one problem you caught early because of it."
@@ -106,6 +108,7 @@ sections:
   - id: E
     title: Compliance and payroll
     scored: true
+    transition: "Finally, a couple of questions on payroll and compliance."
     questions:
       - id: E1
         ask: "Walk me through what you do each month for payroll, PF and ESI. Which parts do you do yourself, and which does a consultant handle?"
