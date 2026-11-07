@@ -115,6 +115,12 @@ sections:
     scored: true
     transition: "Finally, a couple of questions on payroll and compliance."
     questions:
+      - id: E0
+        ask: "Are you familiar with payroll, PF and ESI?"
+        note: >-
+          If they say no, or that someone else always handled it, thank them, save a
+          note "not familiar with payroll/PF/ESI", skip E1 and E2, and go to their
+          questions. If they're partly familiar, ask E1 and E2 anyway.
       - id: E1
         ask: "Walk me through what you do each month for payroll, PF and ESI. Which parts do you do yourself, and which does a consultant handle?"
         listen_for: Attendance, leave and loss-of-pay inputs, monthly PF and ESI challans and returns on the EPFO and ESIC portals, deadlines; clear about what they do personally.

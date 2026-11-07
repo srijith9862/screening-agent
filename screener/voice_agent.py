@@ -164,8 +164,8 @@ def think_live_provider(settings: Settings) -> dict[str, Any]:
     return {
         "type": "deepgram",
         "version": "v1",
-        "agent_backchannel_sensitivity": float(va.get("backchannel_sensitivity", 0.15)),
-        "presence_check_max_count": int(va.get("presence_check_max_count", 2)),
+        "agent_backchannel_sensitivity": float(va.get("backchannel_sensitivity", 0)),
+        "presence_check_max_count": int(va.get("presence_check_max_count", 0)),
         "presence_check_interval_ms": int(va.get("presence_check_interval_ms", 6000)),
         "restricted_terms": ["human", "transfer", "lakhs", "salary", "budget"],
     }
@@ -342,6 +342,8 @@ class AgentCallSession(CallSession):
         said_goodbye_this_turn = False  # since the candidate last spoke
         closing_sent_at: float | None = None  # we made Priya say the closing line ourselves
         closing_check_at: float | None = None  # when to say the closing ourselves if Claude hasn't
+        end_called = False  # Claude asked to hang up
+        muted = False  # drop anything Priya says after her goodbye (no repeated closings)
         # Barge-in: only stop Priya if the candidate's sound is sustained (not a cough or background noise).
         barge_since: float | None = None
         loud_s = 0.0
@@ -440,7 +442,7 @@ class AgentCallSession(CallSession):
             candidate_busy = candidate_speaking_since is not None and now - candidate_speaking_since < 90
             if agent_busy or candidate_busy:
                 last_activity = now
-            elif self._think_live:
+            elif self._think_live and int((self.s.get("voice_agent", {}) or {}).get("presence_check_max_count", 0)) > 0:
                 if ending_since is None and now - last_activity > max(30.0, silence_s * 3):
                     ending_since = now  # Think Live already checked in; nobody's there
                     await ws.send(json.dumps({"type": "InjectAgentMessage", "message":
@@ -453,7 +455,7 @@ class AgentCallSession(CallSession):
                 message = (
                     "I can't hear you clearly, so the team will try again later. Thank you, goodbye!"
                     if silences == max_silences
-                    else "Hello, can you hear me?"
+                    else "Are you still there? Take your time."
                 )
                 await ws.send(json.dumps({"type": "InjectAgentMessage", "message": message}))
                 if silences == max_silences:
@@ -468,6 +470,8 @@ class AgentCallSession(CallSession):
                 return "agent_disconnected"
 
             if isinstance(raw, bytes):
+                if muted:
+                    continue
                 audio = pcm16_to_float(raw)
                 now = time.monotonic()
                 starting_reply = self.engine.player.is_idle() and not held
@@ -485,6 +489,9 @@ class AgentCallSession(CallSession):
             if kind == "ConversationText":
                 speaker = "agent" if msg.get("role") == "assistant" else "candidate"
                 text = (msg.get("content") or "").strip()
+                if speaker == "agent" and end_called and said_goodbye_this_turn:
+                    muted = True  # she already said goodbye; don't let her say it again
+                    continue
                 if text:
                     self._log(speaker, text)
                 if speaker == "candidate":
@@ -509,6 +516,7 @@ class AgentCallSession(CallSession):
                         await self._handle_function(ws, call)
                         if call.get("name") == "end_call" and ending_since is None:
                             ending_since = time.monotonic()
+                            end_called = True
                             if not said_goodbye_this_turn:
                                 closing_check_at = time.monotonic() + 3.0  # give Claude's own goodbye a moment
             elif kind == "Error":
@@ -545,6 +553,7 @@ class AgentCallSession(CallSession):
             self.callback_request = str(args.get("when", "")).strip()
         elif name == "end_call":
             self.end_reason = str(args.get("reason", ""))
+            result = "The call is ending now. Don't say anything else."
         else:
             result = f"unknown function {name}"
         await ws.send(json.dumps({"type": "FunctionCallResponse", "id": call.get("id"), "name": name, "content": result}))

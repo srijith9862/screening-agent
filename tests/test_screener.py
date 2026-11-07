@@ -888,3 +888,40 @@ def test_names_are_cleaned_for_speaking(settings):
     greeting = greeting_text(settings, Candidate(name="Kavya.P"))
     assert greeting.startswith("Hello, this is Priya, an AI assistant from Datasphere Solutions")
     assert greeting.endswith("Am I speaking with Kavya?")
+
+
+def test_voice_agent_does_not_repeat_the_goodbye(settings):
+    from websockets.asyncio.server import serve
+
+    async def repeater(ws):
+        await ws.recv()
+        await ws.send(json.dumps({"type": "SettingsApplied"}))
+        for line in ["Thank you for your time, Ruthwik.", "Our team will get back to you.", "Have a great day!"]:
+            await ws.send(json.dumps({"type": "ConversationText", "role": "assistant", "content": line}))
+            await ws.send(b"\x00\x00" * 2400)
+        await ws.send(json.dumps({"type": "FunctionCallRequest", "functions": [
+            {"id": "e", "name": "end_call", "arguments": "{\"reason\": \"completed\"}", "client_side": True}]}))
+        response = json.loads(await ws.recv())
+        assert response["type"] == "FunctionCallResponse"
+        # Claude speaks again after the function result (the bug we're preventing):
+        await ws.send(json.dumps({"type": "ConversationText", "role": "assistant", "content": "Our team will get back to you."}))
+        await ws.send(b"\x00\x00" * 2400)
+        try:
+            async for _ in ws:
+                pass
+        except Exception:
+            pass
+
+    async def scenario():
+        async with serve(repeater, "127.0.0.1", 0) as server:
+            port = server.sockets[0].getsockname()[1]
+            session = _fake_agent_session(settings, f"ws://127.0.0.1:{port}")
+            session._loop = asyncio.get_running_loop()
+            ended = await asyncio.wait_for(session._agent_conversation("Hello?", 0), 15)
+            return session, ended
+
+    session, ended = asyncio.run(scenario())
+    assert ended == "agent_ended"
+    agent_lines = [t["text"] for t in session.transcript if t["speaker"] == "agent"]
+    assert agent_lines == ["Thank you for your time, Ruthwik.", "Our team will get back to you.", "Have a great day!"]
+    assert len(session._played) == 3  # the repeat's audio was not played

@@ -23,8 +23,8 @@ voice_agent:
   # Deepgram Think Live: treats "mhmm" / "yes" / noise while Priya talks as listening,
   # not an interruption, and checks in on long silences. Set false to turn off.
   think_live: true
-  backchannel_sensitivity: 0.15   # how often Priya says "mhmm" while they talk (0 = never)
-  presence_check_max_count: 2
+  backchannel_sensitivity: 0      # Think Live's own "mhmm"/"right" while they talk (0 = never)
+  presence_check_max_count: 0     # Think Live's own "are you still there?" (0 = off; we handle silence)
   # Priya waits until the candidate has been quiet for at least this long before replying.
   min_reply_gap_s: 1.5
   interrupt_level: 0.01
@@ -90,7 +90,7 @@ call:
   greeting_delay_s: 2        # pause after pickup before "Hello, am I speaking with ...?"
   thinking_wait_s: 4         # after "umm"/"hmm"/"let me think", wait this long before replying
   trailing_off_wait_s: 1.5   # extra wait when an answer ends mid-sentence ("...and", "...because")
-  silence_timeout_s: 10      # nudge the candidate after this much silence
+  silence_timeout_s: 12      # nudge the candidate after this much silence
   max_silences: 2            # end the call after this many nudges in a row
   gap_between_calls_s: 15    # pause between calls (longer gaps help avoid spam flagging)
   retry_after_hours: 3       # don't redial an unfinished call (no answer, hung up) for this long
