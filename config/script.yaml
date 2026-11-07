@@ -77,9 +77,6 @@ sections:
         ask: "In the last 12 months, how many people actually joined through your hiring, and for what kinds of roles?"
         listen_for: A concrete number of joiners (not candidates interviewed), and the role types.
         red_flag: Counts interviews or shortlists as hires.
-      - id: B3
-        ask: "We hire for niche roles like food-safety or drug-regulatory specialists. Where would you find candidates for those, and how would you check they really know the domain?"
-        listen_for: Targeted sourcing (LinkedIn searches, industry groups, referrals, competitors), a domain screening approach such as specific technical questions or involving a subject expert.
 
   - id: C
     title: Remote employee check-ins
