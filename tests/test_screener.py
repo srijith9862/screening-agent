@@ -773,3 +773,38 @@ def test_voice_agent_hangs_up_after_goodbye_without_end_call(settings):
             return await asyncio.wait_for(session._agent_conversation("Hello?", 0), 15)
 
     assert asyncio.run(scenario()) == "agent_ended"
+
+
+def test_parse_callback_times():
+    from datetime import datetime
+
+    from screener.callbacks import parse_callback
+
+    now = datetime(2026, 11, 7, 10, 12)
+    assert parse_callback("Can you please call me after five minutes?", now) == datetime(2026, 11, 7, 10, 17)
+    assert parse_callback("in an hour", now) == datetime(2026, 11, 7, 11, 12)
+    assert parse_callback("after 6 pm", now) == datetime(2026, 11, 7, 18, 0)
+    assert parse_callback("at 4", now) == datetime(2026, 11, 7, 16, 0)
+    assert parse_callback("tomorrow 11 am", now) == datetime(2026, 11, 8, 11, 0)
+    assert parse_callback("I'm in a meeting", now) is None
+
+
+def test_callbacks_are_skipped_until_due_then_called(tmp_path, settings):
+    from datetime import datetime, timedelta
+
+    settings.raw.setdefault("storage", {})["output_dir"] = str(tmp_path)
+    now = datetime.now()
+    fmt = "%Y-%m-%d %H:%M"
+    storage.append_result(settings, {"phone": "+911", "outcome": "call_back_later", "called_at": now.strftime(fmt),
+                                     "callback_due": (now + timedelta(hours=1)).strftime(fmt)})
+    storage.append_result(settings, {"phone": "+912", "outcome": "call_back_later", "called_at": now.strftime(fmt),
+                                     "callback_due": (now - timedelta(minutes=1)).strftime(fmt)})
+    done = storage.already_screened(settings, retry_after_hours=3)
+    assert "+911" in done  # not due yet
+    assert "+912" not in done  # due now, even though it was called minutes ago
+    assert set(storage.pending_callbacks(settings)) == {"+911", "+912"}
+
+
+def test_callback_note_reaches_the_agent(settings):
+    candidate = Candidate(name="Rajitha B", fields={"is_callback": "yes"})
+    assert "calling back as they asked" in candidate_context(settings, candidate)

@@ -131,8 +131,15 @@ def candidate_context(settings: Settings, candidate: Candidate) -> str:
         if notes
         else ""
     )
+    callback_line = (
+        "This is a call-back: earlier they asked to be called back at this time. After they reply to the "
+        "greeting, say you're calling back as they asked, then continue with the opening.\n"
+        if candidate.fields.get("is_callback") == "yes"
+        else ""
+    )
     return (
         f"This call is with {candidate.name} (call them {candidate.first_name}).\n"
+        f"{callback_line}"
         f"Details from their Naukri application, to confirm in section A:\n{facts}\n\n"
         f"Section A questions with their details filled in:\n"
         f"{render_script_section(settings, 'A', values)}"

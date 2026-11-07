@@ -100,6 +100,16 @@ async def _finish(settings: Settings, candidate: Candidate, result, call_dir: Pa
         "callback_request": result.callback_request,
         "duration_min": round(result.duration_s / 60, 1) if result.duration_s else "",
     }
+    if result.callback_request:
+        from .callbacks import parse_callback
+
+        due = parse_callback(result.callback_request, datetime.now())
+        if due is not None:
+            row["callback_due"] = due.strftime("%Y-%m-%d %H:%M")
+            print(f"  Call-back requested ({result.callback_request}): scheduled for {due:%d %b %H:%M}.")
+        else:
+            print(f"  Call-back requested ({result.callback_request}): couldn't work out a time; "
+                  f"will retry after {settings.get('call.retry_after_hours', 3)} hours.")
     meta = {
         "candidate": candidate.name,
         "outcome": result.outcome,
@@ -426,6 +436,10 @@ def cmd_call(args: argparse.Namespace, settings: Settings) -> None:
     gap = int(settings.get("call.gap_between_calls_s", 90))
     confirm = settings.get("call.confirm_before_each_call", True) and not args.yes
     queue = [c for c in candidates if c.phone and c.phone not in done]
+    earlier_callbacks = storage.pending_callbacks(settings)
+    for c in queue:
+        if c.phone in earlier_callbacks:
+            c.fields["is_callback"] = "yes"  # they asked us to call back; it's now due
     skipped_no_phone = [c.name for c in candidates if not c.phone]
     if skipped_no_phone:
         print(f"Skipping (no valid phone number): {', '.join(skipped_no_phone)}")
@@ -434,13 +448,45 @@ def cmd_call(args: argparse.Namespace, settings: Settings) -> None:
     engine = "Deepgram Voice Agent" if settings.get("engine", "voice_agent") != "classic" else "classic"
     print(f"Engine: {engine}\n")
 
+    max_callback_wait_h = float(settings.get("call.max_callback_wait_hours", 3))
+
     async def run() -> None:
         _quiet_connection_resets()
-        for index, candidate in enumerate(queue):
+        pending = list(queue)
+        callbacks: list[tuple[datetime, Candidate]] = []  # requested during this run
+        done_count = 0
+        while pending or callbacks:
             if not _within_calling_hours(settings):
                 print(f"Outside calling hours ({settings.get('call.calling_hours')} IST). Stopping.")
+                if callbacks:
+                    print("  Call-backs still pending (they'll be called on the next run once due): "
+                          + ", ".join(f"{c.name} at {w:%d %b %H:%M}" for w, c in callbacks))
                 return
-            print(f"[{index + 1}/{len(queue)}] {candidate.name}  {candidate.phone}"
+            now = datetime.now()
+            due = sorted((cb for cb in callbacks if cb[0] <= now), key=lambda cb: cb[0])
+            if due:
+                callbacks.remove(due[0])
+                candidate = due[0][1]
+                candidate.fields["is_callback"] = "yes"
+                label = "[call-back]"
+            elif pending:
+                candidate = pending.pop(0)
+                done_count += 1
+                label = f"[{done_count}/{len(queue)}]"
+            else:
+                when = min(w for w, _ in callbacks)
+                wait_s = (when - now).total_seconds()
+                if wait_s > max_callback_wait_h * 3600:
+                    print("List finished. Call-backs later than "
+                          f"{max_callback_wait_h:g} h will be called on the next run: "
+                          + ", ".join(f"{c.name} at {w:%d %b %H:%M}" for w, c in callbacks))
+                    return
+                names = ", ".join(c.name for w, c in callbacks if w == when)
+                print(f"  Waiting until {when:%H:%M} to call back {names} (Ctrl+C to stop)...", flush=True)
+                await asyncio.sleep(min(wait_s, 60))
+                continue
+
+            print(f"{label} {candidate.name}  {candidate.phone}"
                   + (f"  (prefers: {candidate.fields['preferred_call_time']})" if candidate.fields.get("preferred_call_time") else ""))
             if confirm:
                 answer = (await asyncio.to_thread(input, "  Call now? [Y]es / [s]kip / [q]uit: ")).strip().lower()
@@ -454,8 +500,10 @@ def cmd_call(args: argparse.Namespace, settings: Settings) -> None:
                 settings.get("audio.call_in_device"), settings.get("audio.call_out_device"),
             )
             result = await session.run()
-            await _finish(settings, candidate, result, call_dir)
-            if index < len(queue) - 1:
+            row = await _finish(settings, candidate, result, call_dir)
+            if row.get("callback_due"):
+                callbacks.append((datetime.strptime(row["callback_due"], "%Y-%m-%d %H:%M"), candidate))
+            if pending or callbacks:
                 print(f"  Waiting {gap}s before the next call...\n")
                 await asyncio.sleep(gap)
 

@@ -38,6 +38,7 @@ RESULTS_COLUMNS = [
     "red_flags",
     "questions_for_hr",
     "callback_request",
+    "callback_due",
     "summary",
     "duration_min",
     "recording_consent",
@@ -80,26 +81,57 @@ def append_result(settings: Settings, row: dict[str, Any]) -> None:
 FINISHED_OUTCOMES = ("completed", "completed_unscored", "partial", "declined_recording", "not_interested", "wrong_person")
 
 
+def _all_rows(settings: Settings) -> list[dict[str, str]]:
+    """Every results row, oldest file first, in the order they were written."""
+    folder = results_path(settings).parent
+    paths = [*sorted(folder.glob("results-before-*.csv")), results_path(settings)]
+    rows: list[dict[str, str]] = []
+    for path in paths:
+        if path.exists():
+            with path.open(newline="", encoding="utf-8-sig") as handle:
+                rows.extend(csv.DictReader(handle))
+    return rows
+
+
+def _parse_time(text: str, fmt: str) -> datetime | None:
+    try:
+        return datetime.strptime(text or "", fmt)
+    except ValueError:
+        return None
+
+
+def pending_callbacks(settings: Settings) -> dict[str, datetime]:
+    """Phone -> requested call-back time, for candidates whose latest call asked for one."""
+    latest: dict[str, dict[str, str]] = {}
+    for row in _all_rows(settings):
+        latest[row.get("phone", "")] = row
+    due = {}
+    for phone, row in latest.items():
+        when = _parse_time(row.get("callback_due", ""), "%Y-%m-%d %H:%M")
+        if when is not None and row.get("outcome") not in FINISHED_OUTCOMES:
+            due[phone] = when
+    return due
+
+
 def already_screened(settings: Settings, retry_after_hours: float = 0) -> set[str]:
-    """Phones not to call now: finished screenings, plus any call attempt in
-    the last `retry_after_hours` (so no-answers aren't redialled straight away)."""
+    """Phones not to call now: finished screenings; call-backs that aren't due yet;
+    and other recent attempts within `retry_after_hours` (no instant redials)."""
+    now = datetime.now()
+    callbacks = pending_callbacks(settings)
     done = set()
-    cutoff = datetime.now().timestamp() - retry_after_hours * 3600
-    for path in [results_path(settings), *results_path(settings).parent.glob("results-before-*.csv")]:
-        if not path.exists():
+    for row in _all_rows(settings):
+        phone = row.get("phone", "")
+        if row.get("outcome") in FINISHED_OUTCOMES:
+            done.add(phone)
             continue
-        with path.open(newline="", encoding="utf-8-sig") as handle:
-            for row in csv.DictReader(handle):
-                phone = row.get("phone", "")
-                if row.get("outcome") in FINISHED_OUTCOMES:
-                    done.add(phone)
-                    continue
-                try:
-                    called = datetime.strptime(row.get("called_at", ""), "%Y-%m-%d %H:%M").timestamp()
-                except ValueError:
-                    continue
-                if retry_after_hours and called >= cutoff:
-                    done.add(phone)
+        if phone in callbacks:
+            continue  # decided below by the requested time
+        called = _parse_time(row.get("called_at", ""), "%Y-%m-%d %H:%M")
+        if called is not None and retry_after_hours and (now - called).total_seconds() < retry_after_hours * 3600:
+            done.add(phone)
+    for phone, when in callbacks.items():
+        if when > now and phone not in done:
+            done.add(phone)
     return done
 
 
