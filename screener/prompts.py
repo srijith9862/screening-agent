@@ -126,6 +126,15 @@ def voice_agent_prompt(settings: Settings, candidate: Candidate, greeting: str, 
     return "\n\n".join(parts)
 
 
+DEFAULT_GREETING = "Hello, this is {agent_name}, an AI assistant from {company}, calling about your application on Naukri. Am I speaking with {name}?"
+
+
+def greeting_text(settings: Settings, candidate: Candidate) -> str:
+    """The pre-made line spoken as soon as the call is answered."""
+    template = str(settings.script.get("greeting") or DEFAULT_GREETING)
+    return fill(template, {**settings.script_values(), "name": candidate.spoken_name})
+
+
 def candidate_context(settings: Settings, candidate: Candidate) -> str:
     """Per-call details sent as a mid-conversation system message."""
     facts = "\n".join(f"- {k}: {v}" for k, v in candidate.application_facts().items()) or "- (none)"
@@ -144,7 +153,8 @@ def candidate_context(settings: Settings, candidate: Candidate) -> str:
         else ""
     )
     return (
-        f"This call is with {candidate.name} (call them {candidate.first_name}).\n"
+        f"This call is with {candidate.spoken_name}. Address them by name naturally; many Indian names "
+        f"put the family name first, so if they correct you, use the name they prefer.\n"
         f"{callback_line}"
         f"Details from their Naukri application, to confirm in section A:\n{facts}\n\n"
         f"Section A questions with their details filled in:\n"

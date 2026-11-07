@@ -48,7 +48,13 @@ class Candidate:
 
     @property
     def first_name(self) -> str:
-        return self.name.split()[0] if self.name else ""
+        parts = self.spoken_name.split()
+        return parts[0] if parts else ""
+
+    @property
+    def spoken_name(self) -> str:
+        """Name as Priya says it: initials dropped, normal capitalisation ("Kavya.P" -> "Kavya")."""
+        return clean_name(self.name)
 
     @property
     def slug(self) -> str:
@@ -77,6 +83,12 @@ class Candidate:
             "preferred_call_time": "Preferred call time",
         }
         return {label: self.fields[key] for key, label in labels.items() if self.fields.get(key)}
+
+
+def clean_name(name: str) -> str:
+    words = re.split(r"[\s._]+", name or "")
+    kept = [w for w in words if len(re.sub(r"[^A-Za-z]", "", w)) > 1]  # drop initials like "P" or "K."
+    return " ".join(w[:1].upper() + w[1:].lower() for w in kept) or (name or "").strip()
 
 
 def normalize_phone(raw: str, default_country_code: str = "+91") -> str:

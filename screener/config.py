@@ -51,6 +51,7 @@ class Settings:
     def script_values(self) -> dict[str, Any]:
         """Values for {placeholders} that are the same for every candidate."""
         values = {
+            "agent_name": self.agent_name,
             "company": self.script.get("company", ""),
             "role": self.script.get("role", ""),
             "location": self.script.get("location", ""),

@@ -21,7 +21,7 @@ from .audio import STT_RATE, pcm16_to_float
 from .call_session import CallResult, CallSession
 from .config import Settings
 from .phone import CALL_STATE_IDLE, PhoneError
-from .prompts import voice_agent_prompt
+from .prompts import greeting_text, voice_agent_prompt
 
 log = logging.getLogger(__name__)
 
@@ -200,7 +200,7 @@ class AgentCallSession(CallSession):
 
     async def run(self) -> CallResult:
         self._loop = asyncio.get_running_loop()
-        greeting = f"Hello, am I speaking with {self.candidate.first_name}?"
+        greeting = greeting_text(self.s, self.candidate)
         self.engine.start()
         try:
             if self.phone is not None:

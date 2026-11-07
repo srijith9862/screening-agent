@@ -876,3 +876,15 @@ def test_voice_agent_says_goodbye_before_hanging_up(settings):
     assert asyncio.run(scenario()) == "agent_ended"
     assert len(injected) == 1
     assert "Ruthwik" in injected[0] and "next round" in injected[0] and "Have a great day" in injected[0]
+
+
+def test_names_are_cleaned_for_speaking(settings):
+    from screener.candidates import clean_name
+    from screener.prompts import greeting_text
+
+    assert clean_name("Kavya.P") == "Kavya"
+    assert clean_name("vijaynandini giri") == "Vijaynandini Giri"
+    assert clean_name("K. Ramesh Babu") == "Ramesh Babu"
+    greeting = greeting_text(settings, Candidate(name="Kavya.P"))
+    assert greeting.startswith("Hello, this is Priya, an AI assistant from Datasphere Solutions")
+    assert greeting.endswith("Am I speaking with Kavya?")

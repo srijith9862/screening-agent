@@ -10,13 +10,18 @@ role: HR Executive (Talent Acquisition and Employee Relations)
 location: Malakpet, Hyderabad
 target_minutes: 15
 
+# Spoken the moment the call is answered (after a short pause). {name} is the
+# candidate's name without initials.
+greeting: "Hello, this is {agent_name}, an AI assistant from {company}, calling about your HR Executive application on Naukri. Am I speaking with {name}?"
+
 opening: >
-  Greet the candidate by first name and confirm you are speaking with the right
-  person. Say you are an AI assistant calling on behalf of {company} about their
-  application for the {role} role on Naukri. Say the call takes about
-  {target_minutes} minutes and is recorded so the HR team can review it. Ask if
-  now is a good time and whether they are okay with the recording. Do not start
-  the questions until they have clearly agreed to both.
+  The greeting (already spoken) said who you are, that you're an AI assistant
+  from {company}, and why you're calling. Once they confirm who they are, say
+  this is a short screening call of about {target_minutes} minutes and that it's
+  recorded so the HR team can review it, then ask if now is a good time and
+  whether they're okay with the recording. If they ask who's calling or seem
+  unsure, briefly repeat who you are and why you're calling. Do not start the
+  questions until they have clearly agreed to both.
 
 sections:
   - id: A

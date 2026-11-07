@@ -15,6 +15,7 @@ from .brain import AgentTurn, Brain
 from .candidates import Candidate
 from .config import Settings
 from .phone import BLUETOOTH_PATTERN, CALL_STATE_IDLE, Phone, PhoneError, find_node
+from .prompts import greeting_text
 from .speech import TTS_RATE, SpeechEvent, SpeechToText, TextToSpeech, split_sentences
 
 log = logging.getLogger(__name__)
@@ -423,7 +424,7 @@ class CallSession:
         self.engine.start()
         result = CallResult(outcome="connected", recorder=self.recorder)
         # Prepare the greeting while it rings, so it plays the moment they pick up.
-        greeting = f"Hello, am I speaking with {self.candidate.first_name}?"
+        greeting = greeting_text(self.s, self.candidate)
         greeting_audio = asyncio.create_task(self.tts.synthesize(greeting))
         try:
             if self.phone is not None:
