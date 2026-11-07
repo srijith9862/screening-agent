@@ -91,7 +91,7 @@ DEFAULT_KEYTERMS = [
 ]
 
 
-def build_settings(settings: Settings, prompt: str, greeting: str) -> dict[str, Any]:
+def build_settings(settings: Settings, prompt: str, greeting: str, think_live: bool | None = None) -> dict[str, Any]:
     """The Voice Agent `Settings` message."""
     va = settings.get("voice_agent", {}) or {}
     listen: dict[str, Any] = {
@@ -128,6 +128,8 @@ def build_settings(settings: Settings, prompt: str, greeting: str) -> dict[str, 
             "listen": {"provider": listen},
             "think": think,
             "speak": {"provider": speak_provider},
+            **({"think_live": {"provider": think_live_provider(settings)}}
+               if (think_live_enabled(settings) if think_live is None else think_live) else {}),
             "greeting": greeting,
         },
     }
@@ -149,6 +151,24 @@ def closing_line(settings: Settings, first_name: str, reason: str) -> str:
     if reason == "call_back_later":
         return "Thank you, I'll call you back then. Have a good day!"
     return f"Thank you for your time, {first_name}. Have a good day!"
+
+
+def think_live_enabled(settings: Settings) -> bool:
+    return bool((settings.get("voice_agent", {}) or {}).get("think_live", True))
+
+
+def think_live_provider(settings: Settings) -> dict[str, Any]:
+    """Deepgram's Think Live: treats 'mhmm'/'yes'/noise while Priya talks as backchannel,
+    not an interruption, and checks on long silences."""
+    va = settings.get("voice_agent", {}) or {}
+    return {
+        "type": "deepgram",
+        "version": "v1",
+        "agent_backchannel_sensitivity": float(va.get("backchannel_sensitivity", 0.15)),
+        "presence_check_max_count": int(va.get("presence_check_max_count", 2)),
+        "presence_check_interval_ms": int(va.get("presence_check_interval_ms", 6000)),
+        "restricted_terms": ["human", "transfer", "lakhs", "salary", "budget"],
+    }
 
 
 class AgentSetupError(RuntimeError):
@@ -236,6 +256,17 @@ class AgentCallSession(CallSession):
         return ended
 
     async def _agent_conversation(self, greeting: str, greeting_delay: float) -> str:
+        self._think_live = think_live_enabled(self.s)
+        try:
+            return await self._agent_conversation_once(greeting, greeting_delay)
+        except AgentSetupError as exc:
+            if not self._think_live:
+                raise
+            self._say(f"! Think Live wasn't accepted ({exc}); continuing without it.")
+            self._think_live = False
+            return await self._agent_conversation_once(greeting, 0)
+
+    async def _agent_conversation_once(self, greeting: str, greeting_delay: float) -> str:
         from websockets.asyncio.client import connect
 
         started = time.monotonic()
@@ -254,7 +285,7 @@ class AgentCallSession(CallSession):
             remaining = greeting_delay - (time.monotonic() - started)
             if remaining > 0:
                 await asyncio.sleep(remaining)
-            await ws.send(json.dumps(build_settings(self.s, prompt, greeting)))
+            await ws.send(json.dumps(build_settings(self.s, prompt, greeting, think_live=self._think_live)))
             await self._wait_for_settings(ws)
             self._drain_outgoing()  # don't send audio from before the agent was ready
             sender = asyncio.create_task(self._send_audio(ws))
@@ -310,6 +341,7 @@ class AgentCallSession(CallSession):
         goodbye_at: float | None = None  # when the agent said goodbye (backup hang-up if end_call never comes)
         said_goodbye_this_turn = False  # since the candidate last spoke
         closing_sent_at: float | None = None  # we made Priya say the closing line ourselves
+        closing_check_at: float | None = None  # when to say the closing ourselves if Claude hasn't
         # Barge-in: only stop Priya if the candidate's sound is sustained (not a cough or background noise).
         barge_since: float | None = None
         loud_s = 0.0
@@ -365,11 +397,21 @@ class AgentCallSession(CallSession):
                     pass
 
             # Hang up once the goodbye has finished playing.
+            if closing_check_at is not None and now >= closing_check_at:
+                closing_check_at = None
+                if not said_goodbye_this_turn:  # never hang up without a proper goodbye
+                    line = closing_line(self.s, self.candidate.first_name, self.end_reason)
+                    await ws.send(json.dumps({"type": "InjectAgentMessage", "message": line}))
+                    closing_sent_at = now
+
             if ending_since is not None:
-                quiet = now - agent_audio_at > 1.2 and self.engine.player.is_idle() and not held
+                if closing_check_at is not None:
+                    quiet = False
+                else:
+                    quiet = now - agent_audio_at > 1.2 and self.engine.player.is_idle() and not held
                 if closing_sent_at is not None and agent_audio_at < closing_sent_at and now - closing_sent_at < 6:
                     quiet = False  # wait for the closing line we injected to arrive and play
-                if quiet or now - ending_since > 12:
+                if quiet or now - ending_since > 20:
                     await asyncio.sleep(0.5)
                     return "agent_ended"
 
@@ -398,6 +440,11 @@ class AgentCallSession(CallSession):
             candidate_busy = candidate_speaking_since is not None and now - candidate_speaking_since < 90
             if agent_busy or candidate_busy:
                 last_activity = now
+            elif self._think_live:
+                if ending_since is None and now - last_activity > max(30.0, silence_s * 3):
+                    ending_since = now  # Think Live already checked in; nobody's there
+                    await ws.send(json.dumps({"type": "InjectAgentMessage", "message":
+                        "I can't hear you clearly, so the team will try again later. Thank you, goodbye!"}))
             elif ending_since is None and now - last_activity > silence_s:
                 silences += 1
                 last_activity = now
@@ -463,10 +510,7 @@ class AgentCallSession(CallSession):
                         if call.get("name") == "end_call" and ending_since is None:
                             ending_since = time.monotonic()
                             if not said_goodbye_this_turn:
-                                # Never hang up without a proper goodbye.
-                                line = closing_line(self.s, self.candidate.first_name, self.end_reason)
-                                await ws.send(json.dumps({"type": "InjectAgentMessage", "message": line}))
-                                closing_sent_at = time.monotonic()
+                                closing_check_at = time.monotonic() + 3.0  # give Claude's own goodbye a moment
             elif kind == "Error":
                 self._say(f"! Voice Agent error: {msg.get('description') or msg}")
                 return "agent_error"

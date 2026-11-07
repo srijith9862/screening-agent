@@ -241,8 +241,13 @@ class AudioEngine:
                 pass
         self._streams = []
 
+    gain: float = 1.0  # Priya's volume on the call (set from audio.agent_volume)
+
     def play(self, samples: np.ndarray, rate: int) -> None:
-        self.player.enqueue(resample(samples, rate, self.out_rate))
+        audio = resample(samples, rate, self.out_rate)
+        if self.gain != 1.0:
+            audio = np.clip(audio * self.gain, -1.0, 1.0)
+        self.player.enqueue(audio)
 
     async def wait_until_played(self, poll: float = 0.05) -> None:
         while not self.player.is_idle():

@@ -128,6 +128,7 @@ class CallSession:
         # Where the candidate's audio goes (speech-to-text here; the Voice Agent in AgentCallSession).
         self._audio_sink = self.stt.feed
         self.engine = AudioEngine(in_device, out_device, lambda pcm: self._audio_sink(pcm), self.recorder)
+        self.engine.gain = float(settings.get("audio.agent_volume", 1.8))
         self.brain = brain or Brain(settings, candidate)
         self.transcript: list[dict[str, Any]] = []
         self._t0 = 0.0

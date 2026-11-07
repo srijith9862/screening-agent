@@ -20,6 +20,11 @@ voice_agent:
   # level (so coughs and background noise don't cut her off).
   interrupt_after_s: 1.2      # "yes yes" / "haan" while Priya talks won't cut her off
   protect_opening: true       # the introduction and recording question are never cut short
+  # Deepgram Think Live: treats "mhmm" / "yes" / noise while Priya talks as listening,
+  # not an interruption, and checks in on long silences. Set false to turn off.
+  think_live: true
+  backchannel_sensitivity: 0.15   # how often Priya says "mhmm" while they talk (0 = never)
+  presence_check_max_count: 2
   # Priya waits until the candidate has been quiet for at least this long before replying.
   min_reply_gap_s: 1.5
   interrupt_level: 0.01
@@ -59,6 +64,7 @@ audio:
   # to see the exact names on your laptop.
   call_in_device: "CABLE Output"     # what the candidate says (Phone Link plays into "CABLE Input")
   call_out_device: "Hi-Fi Cable Input"   # what the agent says (Phone Link's mic is "Hi-Fi Cable Output")
+  agent_volume: 1.8   # Priya's loudness on the call (1.0 = as generated). Raise if candidates say she's quiet.
 
 phone:
   adb_path: adb              # or full path, e.g. C:\platform-tools\adb.exe
