@@ -400,6 +400,8 @@ def cmd_practice(args: argparse.Namespace, settings: Settings) -> None:
 
 def cmd_rehearse(args: argparse.Namespace, settings: Settings) -> None:
     """Voice rehearsal on your laptop mic and speakers (use headphones), no phone."""
+    if getattr(args, "engine", None):
+        settings.raw["engine"] = args.engine
     session_class = _session_class(settings)
 
     require_env("ANTHROPIC_API_KEY")
@@ -416,6 +418,8 @@ def cmd_rehearse(args: argparse.Namespace, settings: Settings) -> None:
 
 
 def cmd_call(args: argparse.Namespace, settings: Settings) -> None:
+    if getattr(args, "engine", None):
+        settings.raw["engine"] = args.engine
     session_class = _session_class(settings)
     from .phone import Phone
 
@@ -627,11 +631,13 @@ def main(argv: list[str] | None = None) -> None:
     p = with_candidates(sub.add_parser("rehearse", help="voice rehearsal with laptop mic/headphones"))
     p.add_argument("--mic", help="input device name (default: system default)")
     p.add_argument("--speaker", help="output device name (default: system default)")
+    p.add_argument("--engine", choices=["voice_agent", "classic"], help="conversation engine for this run")
     p.add_argument("--no-score", action="store_true")
     p.set_defaults(func=cmd_rehearse)
     p = with_candidates(sub.add_parser("call", help="call candidates through the phone"))
     p.add_argument("--yes", action="store_true", help="don't ask before each call")
     p.add_argument("--redo", action="store_true", help="also call candidates already screened")
+    p.add_argument("--engine", choices=["voice_agent", "classic"], help="conversation engine for this run")
     p.set_defaults(func=cmd_call)
     p = sub.add_parser("simulate", help="test the agent against simulated candidates (no phone)")
     p.add_argument("--only", help="comma-separated personas: strong,vague,curious,declines,callback,knockout")
