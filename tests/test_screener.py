@@ -848,3 +848,31 @@ def test_voice_agent_waits_for_a_pause_before_replying(settings):
 
     assert asyncio.run(scenario()) == "agent_ended"
     assert timeline == {"while_talking": 0, "just_after": 0, "after_gap": 1}
+
+
+def test_voice_agent_says_goodbye_before_hanging_up(settings):
+    from websockets.asyncio.server import serve
+
+    injected = []
+
+    async def abrupt(ws):
+        await ws.recv()
+        await ws.send(json.dumps({"type": "SettingsApplied"}))
+        await ws.send(json.dumps({"type": "ConversationText", "role": "user", "content": "No. No. At the moment."}))
+        await ws.send(json.dumps({"type": "FunctionCallRequest", "functions": [
+            {"id": "e", "name": "end_call", "arguments": "{\"reason\": \"completed\"}", "client_side": True}]}))
+        async for raw in ws:
+            if isinstance(raw, str) and json.loads(raw).get("type") == "InjectAgentMessage":
+                injected.append(json.loads(raw)["message"])
+                await ws.send(b"\x00\x00" * 2400)  # the closing line's audio
+
+    async def scenario():
+        async with serve(abrupt, "127.0.0.1", 0) as server:
+            port = server.sockets[0].getsockname()[1]
+            session = _fake_agent_session(settings, f"ws://127.0.0.1:{port}")
+            session._loop = asyncio.get_running_loop()
+            return await asyncio.wait_for(session._agent_conversation("Hello?", 0), 15)
+
+    assert asyncio.run(scenario()) == "agent_ended"
+    assert len(injected) == 1
+    assert "Ruthwik" in injected[0] and "next round" in injected[0] and "Have a great day" in injected[0]

@@ -140,6 +140,17 @@ def is_goodbye(text: str) -> bool:
     return bool(_GOODBYE.search(text))
 
 
+def closing_line(settings: Settings, first_name: str, reason: str) -> str:
+    """What Priya says if Claude hangs up without saying goodbye."""
+    if reason in ("completed", "other", ""):
+        timeline = settings.script_values().get("reply_timeline", "soon")
+        return (f"Thank you for your time, {first_name}. Our team will review this call and get back to you "
+                f"{timeline} if you're selected for the next round. Have a great day!")
+    if reason == "call_back_later":
+        return "Thank you, I'll call you back then. Have a good day!"
+    return f"Thank you for your time, {first_name}. Have a good day!"
+
+
 class AgentSetupError(RuntimeError):
     """Deepgram rejected or never applied the settings (before anything was said)."""
 
@@ -297,6 +308,8 @@ class AgentCallSession(CallSession):
         agent_audio_at = 0.0  # when the agent last sent audio
         candidate_speaking_since: float | None = None  # between UserStartedSpeaking and their transcript
         goodbye_at: float | None = None  # when the agent said goodbye (backup hang-up if end_call never comes)
+        said_goodbye_this_turn = False  # since the candidate last spoke
+        closing_sent_at: float | None = None  # we made Priya say the closing line ourselves
         # Barge-in: only stop Priya if the candidate's sound is sustained (not a cough or background noise).
         barge_since: float | None = None
         loud_s = 0.0
@@ -349,6 +362,8 @@ class AgentCallSession(CallSession):
             # Hang up once the goodbye has finished playing.
             if ending_since is not None:
                 quiet = now - agent_audio_at > 1.2 and self.engine.player.is_idle() and not held
+                if closing_sent_at is not None and agent_audio_at < closing_sent_at and now - closing_sent_at < 6:
+                    quiet = False  # wait for the closing line we injected to arrive and play
                 if quiet or now - ending_since > 12:
                     await asyncio.sleep(0.5)
                     return "agent_ended"
@@ -424,10 +439,12 @@ class AgentCallSession(CallSession):
                     silences = 0
                     last_activity = time.monotonic()
                     candidate_speaking_since = None
+                    said_goodbye_this_turn = False
                     if len(text.split()) > 4:
                         goodbye_at = None  # they've raised something new; let the agent answer
                 elif text and is_goodbye(text):
                     goodbye_at = time.monotonic()
+                    said_goodbye_this_turn = True
             elif kind == "UserStartedSpeaking":
                 if not self.engine.player.is_idle():
                     barge_since, loud_s = time.monotonic(), 0.0  # decide shortly if it's real speech
@@ -440,6 +457,11 @@ class AgentCallSession(CallSession):
                         await self._handle_function(ws, call)
                         if call.get("name") == "end_call" and ending_since is None:
                             ending_since = time.monotonic()
+                            if not said_goodbye_this_turn:
+                                # Never hang up without a proper goodbye.
+                                line = closing_line(self.s, self.candidate.first_name, self.end_reason)
+                                await ws.send(json.dumps({"type": "InjectAgentMessage", "message": line}))
+                                closing_sent_at = time.monotonic()
             elif kind == "Error":
                 self._say(f"! Voice Agent error: {msg.get('description') or msg}")
                 return "agent_error"

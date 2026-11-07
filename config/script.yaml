@@ -120,8 +120,9 @@ candidate_questions: >
   the HR team will get back to them.
 
 closing: >
-  Thank them for their time and say the team will review the call and get back
-  to them {reply_timeline}. Then end the call.
+  Say exactly once, using their first name: "Thank you for your time, NAME. Our team will review
+  this call and get back to you {reply_timeline} if you're selected for the next
+  round. Have a great day!" Then end the call.
 
 # Things the agent must never do. Added to the agent's instructions verbatim.
 rules:
